@@ -55,33 +55,25 @@ impl Transaction for SolanaTransaction {
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, anychain_core::TransactionError> {
+        let from = Pubkey::from_str(&self.params.from.0).unwrap();
+        let to = Pubkey::from_str(&self.params.to.0).unwrap();
+        let amount = self.params.amount;
+        let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
+        let ins = transfer(&from, &to, amount);
+        let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
         match &self.signature {
             Some(rs) => {
-                let from = Pubkey::from_str(&self.params.from.0).unwrap();
-                let to = Pubkey::from_str(&self.params.to.0).unwrap();
-                let amount = self.params.amount;
-                let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
-                let ins = transfer(&from, &to, amount);
-                let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
                 let mut tx = Tx::new_unsigned(msg);
                 let mut sig = [0u8; 64];
                 sig.copy_from_slice(rs.as_slice());
                 tx.signatures = vec![Signature::from(sig)];
                 Ok(bincode::serialize(&tx).unwrap())
             }
-            None => {
-                let from = Pubkey::from_str(&self.params.from.0).unwrap();
-                let to = Pubkey::from_str(&self.params.to.0).unwrap();
-                let amount = self.params.amount;
-                let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
-                let ins = transfer(&from, &to, amount);
-                let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
-                Ok(msg.serialize())
-            }
+            None => Ok(msg.serialize())
         }
     }
 
-    fn from_bytes(tx: &[u8]) -> Result<Self, anychain_core::TransactionError> {
+    fn from_bytes(_tx: &[u8]) -> Result<Self, anychain_core::TransactionError> {
         todo!()
     }
 
