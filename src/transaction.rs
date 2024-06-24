@@ -1,11 +1,10 @@
-use std::{str::FromStr, fmt};
+use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
+use anychain_core::{Transaction, TransactionError, TransactionId};
 use solana_sdk::{
     hash::Hash, message::Message, pubkey::Pubkey, signature::Signature,
-    system_instruction::transfer,
-    transaction::Transaction as Tx,
+    system_instruction::transfer, transaction::Transaction as Tx,
 };
-use anychain_core::{Transaction, TransactionError, TransactionId};
-use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
+use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransactionParameters {
@@ -40,7 +39,10 @@ impl Transaction for SolanaTransaction {
     type TransactionId = SolanaTransactionId;
 
     fn new(params: &Self::TransactionParameters) -> Result<Self, anychain_core::TransactionError> {
-        Ok(SolanaTransaction {params: params.clone(), signature: None})
+        Ok(SolanaTransaction {
+            params: params.clone(),
+            signature: None,
+        })
     }
 
     fn sign(&mut self, rs: Vec<u8>, _: u8) -> Result<Vec<u8>, anychain_core::TransactionError> {
@@ -69,7 +71,7 @@ impl Transaction for SolanaTransaction {
                 tx.signatures = vec![Signature::from(sig)];
                 Ok(bincode::serialize(&tx).unwrap())
             }
-            None => Ok(msg.serialize())
+            None => Ok(msg.serialize()),
         }
     }
 
@@ -140,7 +142,7 @@ impl Transaction for SolanaTransaction {
 
 //         let mut conn = server_init();
 //         server_send(&mut conn, msg);
-        
+
 //         let rs = server_receive(&mut conn);
 
 //         let mut sig = [0u8; 64];

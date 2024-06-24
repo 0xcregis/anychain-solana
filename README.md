@@ -17,7 +17,7 @@ Add the following to your Cargo.toml file:
 
 ```toml
 [dependencies]
-anychain-solana= "0.1.0"
+anychain-solana= "0.1.1"
 ```
 
 Then, run cargo build to download and compile the library.
