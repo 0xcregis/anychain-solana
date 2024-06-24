@@ -1,155 +1,159 @@
-use {
-    crate::{SolanaAddress, SolanaFormat, SolanaPublicKey},
-    anychain_core::{Transaction, TransactionError, TransactionId},
-    core::str::FromStr,
-    solana_sdk::{
-        hash::Hash as BlockHash, pubkey::Pubkey as RawSolanaPubkey, signature::Signer,
-        signer::keypair::Keypair, system_instruction,
-        transaction::Transaction as RawSolanaTransaction,
-    },
-    std::fmt::Display,
+use std::{str::FromStr, fmt};
+use solana_sdk::{
+    hash::Hash, message::Message, pubkey::Pubkey, signature::Signature,
+    system_instruction::transfer,
+    transaction::Transaction as Tx,
 };
+use anychain_core::{Transaction, TransactionError, TransactionId};
+use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransactionParameters {
-    pub keypair: Keypair,
+    pub from: SolanaAddress,
     pub to: SolanaAddress,
-    pub lamports: u64,
-    pub block_hash: BlockHash,
+    pub amount: u64,
+    pub blockhash: String,
 }
 
-impl Clone for SolanaTransactionParameters {
-    fn clone(&self) -> Self {
-        Self {
-            keypair: self.keypair.insecure_clone(),
-            to: self.to.clone(),
-            lamports: self.lamports,
-            block_hash: self.block_hash,
-        }
-    }
-}
-
-impl SolanaTransactionParameters {
-    pub fn new(keypair: Keypair, to: SolanaAddress, lamports: u64, block_hash: BlockHash) -> Self {
-        Self {
-            keypair,
-            to,
-            lamports,
-            block_hash,
-        }
-    }
-}
-
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransaction {
     pub params: SolanaTransactionParameters,
-    pub transaction: RawSolanaTransaction,
+    pub signature: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SolanaTransactionId {
-    txid: Vec<u8>,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SolanaTransactionId {}
+
+impl fmt::Display for SolanaTransactionId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0xtxid")
+    }
 }
 
 impl TransactionId for SolanaTransactionId {}
-
-impl Display for SolanaTransactionId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{:?}", self.txid)
-    }
-}
 
 impl Transaction for SolanaTransaction {
     type Address = SolanaAddress;
     type Format = SolanaFormat;
     type PublicKey = SolanaPublicKey;
-    type TransactionId = SolanaTransactionId;
     type TransactionParameters = SolanaTransactionParameters;
+    type TransactionId = SolanaTransactionId;
 
-    fn new(params: &Self::TransactionParameters) -> Result<Self, TransactionError> {
-        let SolanaTransactionParameters {
-            keypair,
-            to,
-            lamports,
-            block_hash: _,
-        } = params;
-
-        let bob_pubkey = RawSolanaPubkey::from_str(to.0.as_str())
-            .map_err(|_| TransactionError::Message("Failed to parse Solana address".to_string()))?;
-        let transfer_instruction =
-            system_instruction::transfer(&keypair.pubkey(), &bob_pubkey, *lamports);
-
-        // Create a transaction
-        let transaction =
-            RawSolanaTransaction::new_with_payer(&[transfer_instruction], Some(&keypair.pubkey()));
-
-        Ok(Self {
-            params: params.clone(),
-            transaction,
-        })
+    fn new(params: &Self::TransactionParameters) -> Result<Self, anychain_core::TransactionError> {
+        Ok(SolanaTransaction {params: params.clone(), signature: None})
     }
 
-    fn sign(&mut self, _signature: Vec<u8>, _recid: u8) -> Result<Vec<u8>, TransactionError> {
-        let keypair = &self.params.keypair;
-        let block_hash = self.params.block_hash;
-
-        self.transaction.sign(&[keypair], block_hash);
-
-        let signature = self.transaction.signatures[0].as_ref().to_vec();
-        Ok(signature)
+    fn sign(&mut self, rs: Vec<u8>, _: u8) -> Result<Vec<u8>, anychain_core::TransactionError> {
+        if rs.len() != 64 {
+            return Err(TransactionError::Message(format!(
+                "Invalid signature length {}",
+                rs.len(),
+            )));
+        }
+        self.signature = Some(rs);
+        self.to_bytes()
     }
 
-    fn from_bytes(_tx: &[u8]) -> Result<Self, TransactionError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, anychain_core::TransactionError> {
+        let from = Pubkey::from_str(&self.params.from.0).unwrap();
+        let to = Pubkey::from_str(&self.params.to.0).unwrap();
+        let amount = self.params.amount;
+        let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
+        let ins = transfer(&from, &to, amount);
+        let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
+        match &self.signature {
+            Some(rs) => {
+                let mut tx = Tx::new_unsigned(msg);
+                let mut sig = [0u8; 64];
+                sig.copy_from_slice(rs.as_slice());
+                tx.signatures = vec![Signature::from(sig)];
+                Ok(bincode::serialize(&tx).unwrap())
+            }
+            None => Ok(msg.serialize())
+        }
+    }
+
+    fn from_bytes(_tx: &[u8]) -> Result<Self, anychain_core::TransactionError> {
         todo!()
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, TransactionError> {
-        let message_data = self.transaction.message_data();
-        Ok(message_data)
-    }
-
-    fn to_transaction_id(&self) -> Result<Self::TransactionId, TransactionError> {
+    fn to_transaction_id(&self) -> Result<Self::TransactionId, anychain_core::TransactionError> {
         todo!()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use core::str::FromStr;
-    use ed25519_dalek::KEYPAIR_LENGTH;
-    use solana_sdk::{hash::Hash, signer::keypair::Keypair};
+// mod tests {
+//     use super::*;
+//     use solana_rpc_client::rpc_client::RpcClient;
+//     use std::net::{TcpListener, TcpStream};
+//     use tungstenite::{accept, connect, stream::MaybeTlsStream, Message as WMessage, WebSocket};
+//     use url::Url;
 
-    // const ALICE_ADDRESS: &str = "EpFLfuH524fk9QP9i9uL9AHtX6smBaxaMHwek9T11nK5";
-    const BOB_ADDRESS: &str = "D3AfQC64W8xCqwH1y94dQY4JLG6HQx6uLoHk9V6qqAKr";
+//     fn server_send(ws: &mut WebSocket<TcpStream>, s: String) {
+//         let msg = WMessage::from(s);
+//         ws.write_message(msg).unwrap();
+//     }
 
-    const BLOCK_HASH: &str = "3DaLmounsHb3nzDfTEDdhF2rG2UL7CiwPGXXgFzDkpoy";
+//     fn server_receive(ws: &mut WebSocket<TcpStream>) -> String {
+//         let msg = ws.read_message().unwrap();
+//         msg.to_string()
+//     }
 
-    #[test]
-    fn test_blockhash() {
-        let hash_res = Hash::from_str(BLOCK_HASH);
-        assert!(hash_res.is_ok());
-    }
+//     fn client_send(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>, s: String) {
+//         let msg = WMessage::from(s);
+//         ws.write_message(msg).unwrap();
+//     }
 
-    #[test]
-    fn test_tx_generation_one_one_transfer() {
-        let keypair_bytes: [u8; KEYPAIR_LENGTH] = [
-            41, 196, 252, 146, 80, 100, 13, 46, 69, 89, 172, 157, 224, 135, 23, 62, 54, 65, 52, 68,
-            14, 50, 112, 112, 156, 210, 24, 236, 139, 169, 38, 63, 205, 66, 112, 255, 116, 177, 79,
-            182, 192, 20, 240, 193, 219, 162, 23, 149, 26, 247, 181, 186, 145, 168, 26, 232, 228,
-            76, 102, 109, 64, 189, 172, 44,
-        ];
+//     fn client_receive(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> String {
+//         let msg = ws.read_message().unwrap();
+//         msg.to_string()
+//     }
 
-        // let address_alice = SolanaAddress::from_str(ALICE_ADDRESS).unwrap();
-        let address_bob = SolanaAddress::from_str(BOB_ADDRESS).unwrap();
-        let lamports = 100;
-        let keypair_alice = Keypair::from_bytes(&keypair_bytes).unwrap();
-        let block_hash = solana_sdk::hash::Hash::from_str(BLOCK_HASH).unwrap();
+//     fn server_init() -> WebSocket<TcpStream> {
+//         let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
+//         let (conn, _) = listener.accept().unwrap();
+//         let ws = accept(conn).unwrap();
+//         ws
+//     }
 
-        let params =
-            SolanaTransactionParameters::new(keypair_alice, address_bob, lamports, block_hash);
+//     fn client_init() -> WebSocket<MaybeTlsStream<TcpStream>> {
+//         connect(Url::parse("ws://127.0.0.1:8000").unwrap()).unwrap().0
+//     }
 
-        let mut transaction = SolanaTransaction::new(&params).unwrap();
-        let res = transaction.sign(vec![], 0);
-        assert!(res.is_ok());
-    }
-}
+//     #[test]
+//     fn f() {
+//         let client = RpcClient::new("https://api.devnet.solana.com");
+//         let blockhash = client.get_latest_blockhash().unwrap();
+//         let from = [64, 7, 30, 154, 231, 4, 201, 240, 49, 135, 104, 181, 174, 183, 202, 2, 185, 54, 230, 84, 43, 113, 54, 194, 158, 123, 200, 43, 30, 208, 64, 142];
+//         let from = Pubkey::new_from_array(from);
+//         let to = Pubkey::from_str("AN6yLuRMsyCsj178nhihPdX3DaKUYsaRdD5L3DfNWPDZ").unwrap();
+//         let amount = 1000000000u64;
+
+//         println!("{}\n{}", from, to);
+
+//         let ins = transfer(&from, &to, amount);
+//         let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
+
+//         let mut tx = Tx::new_unsigned(msg);
+//         let msg = hex::encode(tx.message_data());
+//         let msg = format!("[\"{}\"]", msg);
+
+//         let mut conn = server_init();
+//         server_send(&mut conn, msg);
+        
+//         let rs = server_receive(&mut conn);
+
+//         let mut sig = [0u8; 64];
+//         let rs = hex::decode(&rs).unwrap();
+//         sig.copy_from_slice(&rs);
+
+//         let sig = Signature::from(sig);
+
+//         tx.signatures = vec![sig];
+
+//         let tx = bincode::serialize(&tx).unwrap();
+//         let tx = bs58::encode(&tx).into_string();
+
+//         println!("tx = {}", tx);
+//     }
+// }

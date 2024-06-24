@@ -1,7 +1,7 @@
 [package]
 name = "anychain-solana"
 description = "A Rust library for Solana-focused cryptocurrency wallets, enabling seamless transactions on the Solana blockchain"
-version = "0.1.0"
+version = "0.1.1"
 keywords = ["solana", "blockchain", "cryptocurrency", "wallet", "transactions"]
 authors = ["Shawndslee", "cregis.com"]
 edition = "2021"
@@ -11,9 +11,13 @@ repository = "https://github.com/0xcregis/anychain"
 
 [dependencies]
 anychain-core = { version = "0.1.5" }
-ed25519-dalek = { version = "=1.0.1" }
+ed25519-dalek = "1.0.1"
 bs58 = { version = "0.4", default-features = false, features = ["check", "alloc"] }
-#serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 solana-rpc-client = "1.18.11"
 solana-sdk = "1.18.11"
+bincode = "1.3.3"
+rand = "0.8.5"
+hex = "0.4.3"
+# tungstenite = "0.18.0"
+# url = "2.3.1"
