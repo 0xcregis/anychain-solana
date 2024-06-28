@@ -1,0 +1,45 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        rust-version: [1.79.0]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust-version }}
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: cargo clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --workspace --all-targets --tests -- -D warnings
+    - name: Build and test
+      run: cargo test --all-features
