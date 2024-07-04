@@ -2,12 +2,15 @@ use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
 use anychain_core::{Transaction, TransactionError, TransactionId};
 use solana_sdk::{
     hash::Hash, message::Message, pubkey::Pubkey, signature::Signature,
-    system_instruction::transfer, transaction::Transaction as Tx,
+    system_instruction::transfer as sol_transfer, transaction::Transaction as Tx,
 };
+use spl_token::{id, instruction::transfer_checked as token_transfer};
+use spl_associated_token_account::get_associated_token_address;
 use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransactionParameters {
+    pub token: Option<SolanaAddress>,
     pub from: SolanaAddress,
     pub to: SolanaAddress,
     pub amount: u64,
@@ -38,14 +41,14 @@ impl Transaction for SolanaTransaction {
     type TransactionParameters = SolanaTransactionParameters;
     type TransactionId = SolanaTransactionId;
 
-    fn new(params: &Self::TransactionParameters) -> Result<Self, anychain_core::TransactionError> {
+    fn new(params: &Self::TransactionParameters) -> Result<Self, TransactionError> {
         Ok(SolanaTransaction {
             params: params.clone(),
             signature: None,
         })
     }
 
-    fn sign(&mut self, rs: Vec<u8>, _: u8) -> Result<Vec<u8>, anychain_core::TransactionError> {
+    fn sign(&mut self, rs: Vec<u8>, _: u8) -> Result<Vec<u8>, TransactionError> {
         if rs.len() != 64 {
             return Err(TransactionError::Message(format!(
                 "Invalid signature length {}",
@@ -56,13 +59,53 @@ impl Transaction for SolanaTransaction {
         self.to_bytes()
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, anychain_core::TransactionError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, TransactionError> {
         let from = Pubkey::from_str(&self.params.from.0).unwrap();
         let to = Pubkey::from_str(&self.params.to.0).unwrap();
         let amount = self.params.amount;
         let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
-        let ins = transfer(&from, &to, amount);
-        let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
+
+        let msg = match &self.params.token {
+            Some(token) => {
+                let token = Pubkey::from_str(&token.0).unwrap();
+                let src = get_associated_token_address(
+                    &from,
+                    &token,
+                );
+                let dest = get_associated_token_address(
+                    &to,
+                    &token,
+                );
+                let ix = token_transfer(
+                    &id(),
+                    &src,
+                    &token,
+                    &dest,
+                    &from,
+                    &[],
+                    amount,
+                    6,
+                ).unwrap();
+                Message::new_with_blockhash(
+                    &[ix],
+                    Some(&from),
+                    &blockhash
+                )
+            }
+            None => {
+                let ix = sol_transfer(
+                    &from,
+                    &to,
+                    amount,
+                );
+                Message::new_with_blockhash(
+                    &[ix],
+                    Some(&from),
+                    &blockhash,
+                )
+            }
+        };
+
         match &self.signature {
             Some(rs) => {
                 let mut tx = Tx::new_unsigned(msg);
@@ -75,87 +118,89 @@ impl Transaction for SolanaTransaction {
         }
     }
 
-    fn from_bytes(_tx: &[u8]) -> Result<Self, anychain_core::TransactionError> {
+    fn from_bytes(_tx: &[u8]) -> Result<Self, TransactionError> {
         todo!()
     }
 
-    fn to_transaction_id(&self) -> Result<Self::TransactionId, anychain_core::TransactionError> {
+    fn to_transaction_id(&self) -> Result<Self::TransactionId, TransactionError> {
         todo!()
     }
 }
 
-// mod tests {
-//     use super::*;
-//     use solana_rpc_client::rpc_client::RpcClient;
-//     use std::net::{TcpListener, TcpStream};
-//     use tungstenite::{accept, connect, stream::MaybeTlsStream, Message as WMessage, WebSocket};
-//     use url::Url;
+mod tests {
+    use super::*;
+    use anychain_core::amount;
+    use solana_rpc_client::rpc_client::RpcClient;
+    use std::net::{TcpListener, TcpStream};
+    use tungstenite::{accept, connect, stream::MaybeTlsStream, Message as WMessage, WebSocket};
+    use url::Url;
 
-//     fn server_send(ws: &mut WebSocket<TcpStream>, s: String) {
-//         let msg = WMessage::from(s);
-//         ws.write_message(msg).unwrap();
-//     }
+    fn server_send(ws: &mut WebSocket<TcpStream>, s: String) {
+        let msg = WMessage::from(s);
+        ws.write_message(msg).unwrap();
+    }
 
-//     fn server_receive(ws: &mut WebSocket<TcpStream>) -> String {
-//         let msg = ws.read_message().unwrap();
-//         msg.to_string()
-//     }
+    fn server_receive(ws: &mut WebSocket<TcpStream>) -> String {
+        let msg = ws.read_message().unwrap();
+        msg.to_string()
+    }
 
-//     fn client_send(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>, s: String) {
-//         let msg = WMessage::from(s);
-//         ws.write_message(msg).unwrap();
-//     }
+    fn client_send(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>, s: String) {
+        let msg = WMessage::from(s);
+        ws.write_message(msg).unwrap();
+    }
 
-//     fn client_receive(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> String {
-//         let msg = ws.read_message().unwrap();
-//         msg.to_string()
-//     }
+    fn client_receive(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> String {
+        let msg = ws.read_message().unwrap();
+        msg.to_string()
+    }
 
-//     fn server_init() -> WebSocket<TcpStream> {
-//         let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
-//         let (conn, _) = listener.accept().unwrap();
-//         let ws = accept(conn).unwrap();
-//         ws
-//     }
+    fn server_init() -> WebSocket<TcpStream> {
+        let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
+        let (conn, _) = listener.accept().unwrap();
+        let ws = accept(conn).unwrap();
+        ws
+    }
 
-//     fn client_init() -> WebSocket<MaybeTlsStream<TcpStream>> {
-//         connect(Url::parse("ws://127.0.0.1:8000").unwrap()).unwrap().0
-//     }
+    fn client_init() -> WebSocket<MaybeTlsStream<TcpStream>> {
+        connect(Url::parse("ws://127.0.0.1:8000").unwrap()).unwrap().0
+    }
 
-//     #[test]
-//     fn f() {
-//         let client = RpcClient::new("https://api.devnet.solana.com");
-//         let blockhash = client.get_latest_blockhash().unwrap();
-//         let from = [64, 7, 30, 154, 231, 4, 201, 240, 49, 135, 104, 181, 174, 183, 202, 2, 185, 54, 230, 84, 43, 113, 54, 194, 158, 123, 200, 43, 30, 208, 64, 142];
-//         let from = Pubkey::new_from_array(from);
-//         let to = Pubkey::from_str("AN6yLuRMsyCsj178nhihPdX3DaKUYsaRdD5L3DfNWPDZ").unwrap();
-//         let amount = 1000000000u64;
+    #[test]
+    fn f() {
+        let client = RpcClient::new("https://api.mainnet-beta.solana.com");
+        let blockhash = client.get_latest_blockhash().unwrap().to_string();
 
-//         println!("{}\n{}", from, to);
+        let token = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+        let from = "8gvxAVripdzJ7nDNt1tPQWtmeHkq2nrgpe1BRYWMWUUo";
+        let to = "84vJfvciURyMSJ6NkKp97L4B4chQzaqyzSjvuoxuLmz6";
 
-//         let ins = transfer(&from, &to, amount);
-//         let msg = Message::new_with_blockhash(&[ins], Some(&from), &blockhash);
+        let token = Some(SolanaAddress(token.to_string()));
+        let from = SolanaAddress(from.to_string());
+        let to = SolanaAddress(to.to_string());
+        let amount = 200u64;
 
-//         let mut tx = Tx::new_unsigned(msg);
-//         let msg = hex::encode(tx.message_data());
-//         let msg = format!("[\"{}\"]", msg);
+        let mut tx = SolanaTransaction::new(
+            &SolanaTransactionParameters {
+            token,
+            from,
+            to,
+            amount,
+            blockhash,
+        }).unwrap();
 
-//         let mut conn = server_init();
-//         server_send(&mut conn, msg);
+        let msg = hex::encode(tx.to_bytes().unwrap());
+        let msg = format!("[\"{}\"]", msg);
 
-//         let rs = server_receive(&mut conn);
+        let mut conn = server_init();
+        server_send(&mut conn, msg);
 
-//         let mut sig = [0u8; 64];
-//         let rs = hex::decode(&rs).unwrap();
-//         sig.copy_from_slice(&rs);
+        let sig = server_receive(&mut conn);
+        let sig = hex::decode(sig).unwrap();
+        
+        let tx = tx.sign(sig, 0).unwrap();
+        let tx = bs58::encode(tx).into_string();
 
-//         let sig = Signature::from(sig);
-
-//         tx.signatures = vec![sig];
-
-//         let tx = bincode::serialize(&tx).unwrap();
-//         let tx = bs58::encode(&tx).into_string();
-
-//         println!("tx = {}", tx);
-//     }
-// }
+        println!("tx: {}", tx);
+    }
+}
