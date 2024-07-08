@@ -25,6 +25,7 @@ Then, run cargo build to download and compile the library.
 ## Usage
 
 ```shell
+cargo build --example create-account
 cargo run --example create-account
 ```
 

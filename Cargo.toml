@@ -24,6 +24,9 @@ rand = "0.8.5"
 hex = "0.4.3"
 spl-token = "6.0.0"
 spl-associated-token-account = "4.0.0"
-# solana-rpc-client = "2.0.0"
-# tungstenite = "0.18.0"
-# url = "2.3.1"
+
+[dev-dependencies]
+solana-rpc-client = "2.0.1"
+solana-rpc-client-api = "2.0.1"
+anyhow = "1.0"
+tiny-bip39 = "0.8.2"
