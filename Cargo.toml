@@ -9,6 +9,10 @@ homepage = "https://www.cregis.com"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/0xcregis/anychain"
 
+[[example]]
+name = "create-account"
+path = "examples/create-account.rs"
+
 [dependencies]
 anychain-core = { version = "0.1.5" }
 ed25519-dalek = "1.0.1"

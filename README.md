@@ -24,6 +24,10 @@ Then, run cargo build to download and compile the library.
 
 ## Usage
 
+```shell
+cargo run --example create-account
+```
+
 ## License
 
 anychain-solana released under the MIT License. See the [LICENSE](LICENSE) file for more information. 
