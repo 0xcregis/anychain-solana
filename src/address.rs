@@ -1,16 +1,24 @@
 use {
-    crate::{format::SolanaFormat, public_key::SolanaPublicKey},
-    anychain_core::{Address, AddressError, PublicKey, PublicKeyError},
-    core::{
+    crate::{format::SolanaFormat, public_key::SolanaPublicKey}, anychain_core::{Address, AddressError, PublicKey, PublicKeyError}, core::{
         fmt::{Display, Formatter, Result as FmtResult},
         str::FromStr,
-    },
-    ed25519_dalek::PUBLIC_KEY_LENGTH,
+    }, ed25519_dalek::PUBLIC_KEY_LENGTH, solana_sdk::pubkey::Pubkey, spl_associated_token_account::get_associated_token_address
 };
 
 /// Represents a Solana address
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SolanaAddress(pub String);
+
+impl SolanaAddress {
+    pub fn associated_token_address(&self, token: String) -> Result<String, AddressError> {
+        let address = Pubkey::from_str(&self.0)
+            .map_err(|e| AddressError::Message(format!("{}", e)))?;
+        let token = Pubkey::from_str(&token)
+            .map_err(|e| AddressError::Message(format!("{}", e)))?;
+        let associated_token_address = get_associated_token_address(&address, &token);
+        Ok(associated_token_address.to_string())
+    }
+}
 
 impl Address for SolanaAddress {
     type SecretKey = ed25519_dalek::SecretKey;
