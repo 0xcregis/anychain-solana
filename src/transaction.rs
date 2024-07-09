@@ -4,13 +4,17 @@ use solana_sdk::{
     hash::Hash, message::Message, pubkey::Pubkey, signature::Signature,
     system_instruction::transfer as sol_transfer, transaction::Transaction as Tx,
 };
-use spl_associated_token_account::get_associated_token_address;
+use spl_associated_token_account::{
+    get_associated_token_address,
+    instruction::create_associated_token_account,
+};
 use spl_token::{id, instruction::transfer_checked as token_transfer};
 use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransactionParameters {
     pub token: Option<SolanaAddress>,
+    pub has_token_account: Option<bool>,
     pub from: SolanaAddress,
     pub to: SolanaAddress,
     pub amount: u64,
@@ -70,8 +74,42 @@ impl Transaction for SolanaTransaction {
                 let token = Pubkey::from_str(&token.0).unwrap();
                 let src = get_associated_token_address(&from, &token);
                 let dest = get_associated_token_address(&to, &token);
-                let ix = token_transfer(&id(), &src, &token, &dest, &from, &[], amount, 6).unwrap();
-                Message::new_with_blockhash(&[ix], Some(&from), &blockhash)
+                let ixs = match self.params.has_token_account {
+                    Some(true) => {
+                        let ix_transfer = token_transfer(
+                            &id(),
+                            &src,
+                            &token,
+                            &dest,
+                            &from,
+                            &[],
+                            amount,
+                            6,
+                        ).unwrap();
+                        vec![ix_transfer]
+                    }
+                    Some(false) => {
+                        let ix_create_account = create_associated_token_account(
+                            &from,
+                            &to,
+                            &token,
+                            &id(),
+                        );
+                        let ix_transfer = token_transfer(
+                            &id(),
+                            &src,
+                            &token,
+                            &dest,
+                            &from,
+                            &[],
+                            amount,
+                            6,
+                        ).unwrap();
+                        vec![ix_create_account, ix_transfer]
+                    }
+                    None => return Err(TransactionError::Message("'has_token_account' is not provided".to_string())),
+                };
+                Message::new_with_blockhash(&ixs,Some(&from), &blockhash)
             }
             None => {
                 let ix = sol_transfer(&from, &to, amount);
