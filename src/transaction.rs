@@ -1,13 +1,20 @@
 use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
-use anychain_core::{Transaction, TransactionError, TransactionId};
+use anychain_core::{crypto::sha256, Transaction, TransactionError, TransactionId};
 use solana_sdk::{
-    hash::Hash, message::Message, pubkey::Pubkey, signature::Signature,
-    system_instruction::transfer as sol_transfer, transaction::Transaction as Tx,
+    hash::Hash,
+    message::Message,
+    pubkey::Pubkey,
+    signature::Signature,
+    system_instruction::{transfer as sol_transfer, SystemInstruction},
+    transaction::Transaction as Tx,
 };
 use spl_associated_token_account::{
     get_associated_token_address, instruction::create_associated_token_account,
 };
-use spl_token::{id, instruction::transfer_checked as token_transfer};
+use spl_token::{
+    id,
+    instruction::{transfer_checked as token_transfer, TokenInstruction},
+};
 use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -27,11 +34,11 @@ pub struct SolanaTransaction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SolanaTransactionId {}
+pub struct SolanaTransactionId(pub [u8; 32]);
 
 impl fmt::Display for SolanaTransactionId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "0xtxid")
+        write!(f, "{}", bs58::encode(&self.0.to_vec()).into_string())
     }
 }
 
@@ -114,11 +121,177 @@ impl Transaction for SolanaTransaction {
         }
     }
 
-    fn from_bytes(_tx: &[u8]) -> Result<Self, TransactionError> {
-        todo!()
+    fn from_bytes(tx: &[u8]) -> Result<Self, TransactionError> {
+        let tx = bincode::deserialize::<Tx>(tx)
+            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+
+        let sig = if tx.signatures.len() > 0 {
+            let rs = tx.signatures[0];
+            let mut sig = [0u8; 64];
+            sig.copy_from_slice(rs.as_ref());
+            Some(sig.to_vec())
+        } else {
+            None
+        };
+
+        let keys = tx.message.account_keys;
+        let ixs = tx.message.instructions;
+        let blockhash = tx.message.recent_blockhash;
+
+        match ixs.len() {
+            1 => {
+                let program = keys[ixs[0].program_id_index as usize];
+                let account = &ixs[0].accounts;
+                let data = &ixs[0].data;
+                match format!("{}", program).as_str() {
+                    "11111111111111111111111111111111" => {
+                        let from = keys[account[0] as usize];
+                        let to = keys[account[1] as usize];
+
+                        let ix = bincode::deserialize::<SystemInstruction>(data)
+                            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+
+                        match ix {
+                            SystemInstruction::Transfer { lamports } => {
+                                let params = SolanaTransactionParameters {
+                                    token: None,
+                                    has_token_account: None,
+                                    from: SolanaAddress(from.to_string()),
+                                    to: SolanaAddress(to.to_string()),
+                                    amount: lamports,
+                                    blockhash: blockhash.to_string(),
+                                };
+                                let mut tx = SolanaTransaction::new(&params)?;
+                                tx.signature = sig;
+                                Ok(tx)
+                            }
+                            _ => {
+                                return Err(TransactionError::Message(format!(
+                                    "Unsupported system instruction: {:?}",
+                                    ix
+                                )))
+                            }
+                        }
+                    }
+                    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" => {
+                        let token = keys[account[1] as usize];
+                        let dest = keys[account[2] as usize];
+                        let from = keys[account[3] as usize];
+
+                        let ix = TokenInstruction::unpack(data)
+                            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+
+                        match ix {
+                            TokenInstruction::TransferChecked { amount, .. } => {
+                                let params = SolanaTransactionParameters {
+                                    token: Some(SolanaAddress(token.to_string())),
+                                    has_token_account: Some(true),
+                                    from: SolanaAddress(from.to_string()),
+                                    to: SolanaAddress(dest.to_string()),
+                                    amount,
+                                    blockhash: blockhash.to_string(),
+                                };
+                                let mut tx = SolanaTransaction::new(&params)?;
+                                tx.signature = sig;
+                                Ok(tx)
+                            }
+                            _ => {
+                                return Err(TransactionError::Message(format!(
+                                    "Unsupported token instruction: {:?}",
+                                    ix
+                                )))
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(TransactionError::Message(format!(
+                            "Unsupported program {}",
+                            program
+                        )))
+                    }
+                }
+            }
+            2 => {
+                let program1 = keys[ixs[0].program_id_index as usize];
+                let program2 = keys[ixs[1].program_id_index as usize];
+
+                if format!("{}", program1).as_str()
+                    != "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+                {
+                    return Err(TransactionError::Message(format!(
+                        "Unsupported first program {}",
+                        program1
+                    )));
+                }
+
+                if format!("{}", program2).as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                {
+                    return Err(TransactionError::Message(format!(
+                        "Unsupported second program {}",
+                        program2
+                    )));
+                }
+
+                let account = &ixs[0].accounts;
+                let data = &ixs[1].data;
+
+                let funding_address = keys[account[0] as usize];
+                let funded_address = keys[account[2] as usize];
+                let token_address = keys[account[3] as usize];
+
+                let ix = TokenInstruction::unpack(data)
+                    .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+
+                match ix {
+                    TokenInstruction::TransferChecked { amount, .. } => {
+                        let params = SolanaTransactionParameters {
+                            token: Some(SolanaAddress(token_address.to_string())),
+                            has_token_account: Some(false),
+                            from: SolanaAddress(funding_address.to_string()),
+                            to: SolanaAddress(funded_address.to_string()),
+                            amount,
+                            blockhash: blockhash.to_string(),
+                        };
+                        let mut tx = SolanaTransaction::new(&params)?;
+                        tx.signature = sig;
+                        Ok(tx)
+                    }
+                    _ => {
+                        return Err(TransactionError::Message(format!(
+                            "Unsupported token instruction: {:?}",
+                            ix
+                        )))
+                    }
+                }
+            }
+            _ => {
+                return Err(TransactionError::Message(format!(
+                    "Unsupported instruction amount: {}",
+                    ixs.len()
+                )))
+            }
+        }
     }
 
     fn to_transaction_id(&self) -> Result<Self::TransactionId, TransactionError> {
-        todo!()
+        Ok(SolanaTransactionId(sha256(&self.to_bytes()?)))
     }
+}
+
+impl FromStr for SolanaTransaction {
+    type Err = TransactionError;
+    fn from_str(tx: &str) -> Result<Self, Self::Err> {
+        let tx = bs58::decode(tx)
+            .into_vec()
+            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+        Ok(SolanaTransaction::from_bytes(&tx)?)
+    }
+}
+
+#[test]
+fn test() {
+    let tx = "8ZSUSUAFEt9uNtyWHzyFPHGRa1RVxdi3Gr8csSqSC2ssvcyA95aSBXfRR4XBBcaAe66PmQiQ8DnkNX5TmeGdPEJeW6wrRDMvf63hrnMWeRcQfdVTKQH7PQw9dd64Sfmrk7FSMNMJDe3V1bGNSQSXC7niK497QP2DNEdX9cSNaUHqBvwoD1kqfYwtuL1M5qXDdHfzjZgLWLTRGLxKAksT9R64XcKKTbBWwV19LATZGhCEcNzpKB4hqn1YJ54oWEkF5ufrzGJMYtN4a8UWkjFsiQtU8LLx2NZHkEJ3msyBWeehsb6KxUA3XWrNLF3RMtiNmoLZmqXqjk3kUxumqFzwKUwommNSjjkHNXgpTekFMM8am57Y5ow11tJCT8nsKzzcPpEAvrPEND7QsW5M7umxLLPupSAx59A5TcNkNotKigkHjCQnmHs6aRScBGnxDnzbWb6hfjX7c4tnCiiNnn6ksarfbkNjMUWZLvYQJ9ZP717PX9ca91naYZPYRg1Q3uYGmuVtuygVZoAQV";
+    let tx = SolanaTransaction::from_str(tx).unwrap();
+    let txid = format!("{}", tx.to_transaction_id().unwrap());
+    println!("{}", txid);
 }

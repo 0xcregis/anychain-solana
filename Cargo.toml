@@ -24,6 +24,7 @@ rand = "0.8.5"
 hex = "0.4.3"
 spl-token = "6.0.0"
 spl-associated-token-account = "4.0.0"
+serde_json = "1.0.120"
 
 [dev-dependencies]
 solana-rpc-client = "2.0.1"
