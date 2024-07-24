@@ -39,7 +39,7 @@ impl FromStr for SolanaTransaction {
         let tx = bs58::decode(tx)
             .into_vec()
             .map_err(|e| TransactionError::Message(format!("{}", e)))?;
-        Ok(SolanaTransaction::from_bytes(&tx)?)
+        SolanaTransaction::from_bytes(&tx)
     }
 }
 
@@ -135,7 +135,7 @@ impl Transaction for SolanaTransaction {
         let tx = bincode::deserialize::<Tx>(tx)
             .map_err(|e| TransactionError::Message(format!("{}", e)))?;
 
-        let sig = if tx.signatures.len() > 0 {
+        let sig = if !tx.signatures.is_empty() {
             let rs = tx.signatures[0];
             let mut sig = [0u8; 64];
             sig.copy_from_slice(rs.as_ref());
@@ -176,7 +176,7 @@ impl Transaction for SolanaTransaction {
                                 Ok(tx)
                             }
                             _ => {
-                                return Err(TransactionError::Message(format!(
+                                Err(TransactionError::Message(format!(
                                     "Unsupported system instruction: {:?}",
                                     ix
                                 )))
@@ -206,7 +206,7 @@ impl Transaction for SolanaTransaction {
                                 Ok(tx)
                             }
                             _ => {
-                                return Err(TransactionError::Message(format!(
+                                Err(TransactionError::Message(format!(
                                     "Unsupported token instruction: {:?}",
                                     ix
                                 )))
@@ -214,7 +214,7 @@ impl Transaction for SolanaTransaction {
                         }
                     }
                     _ => {
-                        return Err(TransactionError::Message(format!(
+                        Err(TransactionError::Message(format!(
                             "Unsupported program {}",
                             program
                         )))
@@ -267,7 +267,7 @@ impl Transaction for SolanaTransaction {
                         Ok(tx)
                     }
                     _ => {
-                        return Err(TransactionError::Message(format!(
+                        Err(TransactionError::Message(format!(
                             "Unsupported token instruction: {:?}",
                             ix
                         )))
@@ -275,7 +275,7 @@ impl Transaction for SolanaTransaction {
                 }
             }
             _ => {
-                return Err(TransactionError::Message(format!(
+                Err(TransactionError::Message(format!(
                     "Unsupported instruction amount: {}",
                     ixs.len()
                 )))
