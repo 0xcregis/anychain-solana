@@ -175,12 +175,10 @@ impl Transaction for SolanaTransaction {
                                 tx.signature = sig;
                                 Ok(tx)
                             }
-                            _ => {
-                                Err(TransactionError::Message(format!(
-                                    "Unsupported system instruction: {:?}",
-                                    ix
-                                )))
-                            }
+                            _ => Err(TransactionError::Message(format!(
+                                "Unsupported system instruction: {:?}",
+                                ix
+                            ))),
                         }
                     }
                     "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" => {
@@ -205,20 +203,16 @@ impl Transaction for SolanaTransaction {
                                 tx.signature = sig;
                                 Ok(tx)
                             }
-                            _ => {
-                                Err(TransactionError::Message(format!(
-                                    "Unsupported token instruction: {:?}",
-                                    ix
-                                )))
-                            }
+                            _ => Err(TransactionError::Message(format!(
+                                "Unsupported token instruction: {:?}",
+                                ix
+                            ))),
                         }
                     }
-                    _ => {
-                        Err(TransactionError::Message(format!(
-                            "Unsupported program {}",
-                            program
-                        )))
-                    }
+                    _ => Err(TransactionError::Message(format!(
+                        "Unsupported program {}",
+                        program
+                    ))),
                 }
             }
             2 => {
@@ -266,20 +260,16 @@ impl Transaction for SolanaTransaction {
                         tx.signature = sig;
                         Ok(tx)
                     }
-                    _ => {
-                        Err(TransactionError::Message(format!(
-                            "Unsupported token instruction: {:?}",
-                            ix
-                        )))
-                    }
+                    _ => Err(TransactionError::Message(format!(
+                        "Unsupported token instruction: {:?}",
+                        ix
+                    ))),
                 }
             }
-            _ => {
-                Err(TransactionError::Message(format!(
-                    "Unsupported instruction amount: {}",
-                    ixs.len()
-                )))
-            }
+            _ => Err(TransactionError::Message(format!(
+                "Unsupported instruction amount: {}",
+                ixs.len()
+            ))),
         }
     }
 
