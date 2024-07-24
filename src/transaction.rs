@@ -1,5 +1,5 @@
 use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
-use anychain_core::{crypto::sha256, Transaction, TransactionError, TransactionId};
+use anychain_core::{Transaction, TransactionError, TransactionId};
 use solana_sdk::{
     hash::Hash,
     message::Message,
@@ -33,8 +33,18 @@ pub struct SolanaTransaction {
     pub signature: Option<Vec<u8>>,
 }
 
+impl FromStr for SolanaTransaction {
+    type Err = TransactionError;
+    fn from_str(tx: &str) -> Result<Self, Self::Err> {
+        let tx = bs58::decode(tx)
+            .into_vec()
+            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+        Ok(SolanaTransaction::from_bytes(&tx)?)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SolanaTransactionId(pub [u8; 32]);
+pub struct SolanaTransactionId(pub [u8; 64]);
 
 impl fmt::Display for SolanaTransactionId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -274,24 +284,23 @@ impl Transaction for SolanaTransaction {
     }
 
     fn to_transaction_id(&self) -> Result<Self::TransactionId, TransactionError> {
-        Ok(SolanaTransactionId(sha256(&self.to_bytes()?)))
-    }
-}
-
-impl FromStr for SolanaTransaction {
-    type Err = TransactionError;
-    fn from_str(tx: &str) -> Result<Self, Self::Err> {
-        let tx = bs58::decode(tx)
-            .into_vec()
-            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
-        Ok(SolanaTransaction::from_bytes(&tx)?)
+        match &self.signature {
+            Some(sig) => {
+                let mut txid = [0u8; 64];
+                txid.copy_from_slice(sig);
+                Ok(SolanaTransactionId(txid))
+            }
+            None => Err(TransactionError::Message(
+                "Transaction is not signed".to_string(),
+            )),
+        }
     }
 }
 
 #[test]
 fn test() {
-    let tx = "8ZSUSUAFEt9uNtyWHzyFPHGRa1RVxdi3Gr8csSqSC2ssvcyA95aSBXfRR4XBBcaAe66PmQiQ8DnkNX5TmeGdPEJeW6wrRDMvf63hrnMWeRcQfdVTKQH7PQw9dd64Sfmrk7FSMNMJDe3V1bGNSQSXC7niK497QP2DNEdX9cSNaUHqBvwoD1kqfYwtuL1M5qXDdHfzjZgLWLTRGLxKAksT9R64XcKKTbBWwV19LATZGhCEcNzpKB4hqn1YJ54oWEkF5ufrzGJMYtN4a8UWkjFsiQtU8LLx2NZHkEJ3msyBWeehsb6KxUA3XWrNLF3RMtiNmoLZmqXqjk3kUxumqFzwKUwommNSjjkHNXgpTekFMM8am57Y5ow11tJCT8nsKzzcPpEAvrPEND7QsW5M7umxLLPupSAx59A5TcNkNotKigkHjCQnmHs6aRScBGnxDnzbWb6hfjX7c4tnCiiNnn6ksarfbkNjMUWZLvYQJ9ZP717PX9ca91naYZPYRg1Q3uYGmuVtuygVZoAQV";
+    let tx = "BU8oN58NjvzGdbuQ8zGKF9cJ7N25iWRRgnLodf42gEVDnzcQ3g5y7eygBviCRQHH4sC335gt575JA2NfjpX3P7m1vZ5WYWxHem7wW3Pc4S6YYi4ftivYiGqTMr6eKtUVCbBZabwyMuZ7iGjUtTB6L7LnfQj6wGduNUqwpGPy2xD8aFps6zRfgwNAXe9tpoa3tQvTnyU8WgkpiZjkBFdfXFw8abhsUZLZsxaYra2CHmqrXwG6VFUfhTdYANPTXcBcZ2a75RmqC19d5rYJPexmpGJV529A4WXgE4Pm5Gk5AUB7LcNmAxfkKxJk3ikGohb9n3B7vJ3T9zJZg4i6xEGapobavsLwMuYkCjnRBQ69rouMCJEtz33XNuwx1ZN84cGimZV1KSbwQgcPDFzgdZR2ZisViDWAJUXkadfCfADNEME1jxmHDy7oX9gTYJvkeZAnoFjxVhKrVZft8FaADcRgNcdZJPdt9rMMSpCJXBFgBVsGaqo6iteJqg79qQrEoScRviUh6scB7iwCh";
     let tx = SolanaTransaction::from_str(tx).unwrap();
-    let txid = format!("{}", tx.to_transaction_id().unwrap());
+    let txid = tx.to_transaction_id().unwrap();
     println!("{}", txid);
 }
