@@ -93,23 +93,41 @@ impl Transaction for SolanaTransaction {
                 let dest = get_associated_token_address(&to, &token);
                 let decimals = match self.params.decimals {
                     Some(d) => d,
-                    None => return Err(TransactionError::Message(
-                        "'decimal' is not provided".to_string(),
-                    )),
+                    None => {
+                        return Err(TransactionError::Message(
+                            "'decimal' is not provided".to_string(),
+                        ))
+                    }
                 };
                 let ixs = match self.params.has_token_account {
                     Some(true) => {
-                        let ix_transfer =
-                            token_transfer(&id(), &src, &token, &dest, &from, &[], amount, decimals)
-                                .unwrap();
+                        let ix_transfer = token_transfer(
+                            &id(),
+                            &src,
+                            &token,
+                            &dest,
+                            &from,
+                            &[],
+                            amount,
+                            decimals,
+                        )
+                        .unwrap();
                         vec![ix_transfer]
                     }
                     Some(false) => {
                         let ix_create_account =
                             create_associated_token_account(&from, &to, &token, &id());
-                        let ix_transfer =
-                            token_transfer(&id(), &src, &token, &dest, &from, &[], amount, decimals)
-                                .unwrap();
+                        let ix_transfer = token_transfer(
+                            &id(),
+                            &src,
+                            &token,
+                            &dest,
+                            &from,
+                            &[],
+                            amount,
+                            decimals,
+                        )
+                        .unwrap();
                         vec![ix_create_account, ix_transfer]
                     }
                     None => {
