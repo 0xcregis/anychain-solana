@@ -21,6 +21,7 @@ use std::{fmt, str::FromStr};
 pub struct SolanaTransactionParameters {
     pub token: Option<SolanaAddress>,
     pub has_token_account: Option<bool>,
+    pub decimals: Option<u8>,
     pub from: SolanaAddress,
     pub to: SolanaAddress,
     pub amount: u64,
@@ -90,10 +91,16 @@ impl Transaction for SolanaTransaction {
                 let token = Pubkey::from_str(&token.0).unwrap();
                 let src = get_associated_token_address(&from, &token);
                 let dest = get_associated_token_address(&to, &token);
+                let decimals = match self.params.decimals {
+                    Some(d) => d,
+                    None => return Err(TransactionError::Message(
+                        "'decimal' is not provided".to_string(),
+                    )),
+                };
                 let ixs = match self.params.has_token_account {
                     Some(true) => {
                         let ix_transfer =
-                            token_transfer(&id(), &src, &token, &dest, &from, &[], amount, 6)
+                            token_transfer(&id(), &src, &token, &dest, &from, &[], amount, decimals)
                                 .unwrap();
                         vec![ix_transfer]
                     }
@@ -101,7 +108,7 @@ impl Transaction for SolanaTransaction {
                         let ix_create_account =
                             create_associated_token_account(&from, &to, &token, &id());
                         let ix_transfer =
-                            token_transfer(&id(), &src, &token, &dest, &from, &[], amount, 6)
+                            token_transfer(&id(), &src, &token, &dest, &from, &[], amount, decimals)
                                 .unwrap();
                         vec![ix_create_account, ix_transfer]
                     }
@@ -166,6 +173,7 @@ impl Transaction for SolanaTransaction {
                                 let params = SolanaTransactionParameters {
                                     token: None,
                                     has_token_account: None,
+                                    decimals: None,
                                     from: SolanaAddress(from.to_string()),
                                     to: SolanaAddress(to.to_string()),
                                     amount: lamports,
@@ -190,10 +198,11 @@ impl Transaction for SolanaTransaction {
                             .map_err(|e| TransactionError::Message(format!("{}", e)))?;
 
                         match ix {
-                            TokenInstruction::TransferChecked { amount, .. } => {
+                            TokenInstruction::TransferChecked { amount, decimals } => {
                                 let params = SolanaTransactionParameters {
                                     token: Some(SolanaAddress(token.to_string())),
                                     has_token_account: Some(true),
+                                    decimals: Some(decimals),
                                     from: SolanaAddress(from.to_string()),
                                     to: SolanaAddress(dest.to_string()),
                                     amount,
@@ -247,10 +256,11 @@ impl Transaction for SolanaTransaction {
                     .map_err(|e| TransactionError::Message(format!("{}", e)))?;
 
                 match ix {
-                    TokenInstruction::TransferChecked { amount, .. } => {
+                    TokenInstruction::TransferChecked { amount, decimals } => {
                         let params = SolanaTransactionParameters {
                             token: Some(SolanaAddress(token_address.to_string())),
                             has_token_account: Some(false),
+                            decimals: Some(decimals),
                             from: SolanaAddress(funding_address.to_string()),
                             to: SolanaAddress(funded_address.to_string()),
                             amount,
