@@ -1,8 +1,9 @@
 [package]
 name = "anychain-solana"
 description = "A Rust library for Solana-focused cryptocurrency wallets, enabling seamless transactions on the Solana blockchain"
-version = "0.1.8"
-keywords = ["solana", "blockchain", "cryptocurrency", "wallet", "transactions"]
+version = "0.1.9"
+keywords = ["solana", "blockchain", "wallet", "transactions"]
+categories = ["cryptography::cryptocurrencies"]
 authors = ["Shawndslee", "cregis.com"]
 edition = "2021"
 homepage = "https://www.cregis.com"
@@ -14,7 +15,7 @@ name = "create-account"
 path = "examples/create-account.rs"
 
 [dependencies]
-anychain-core = { version = "0.1.6" }
+anychain-core = { version = "0.1.7" }
 ed25519-dalek = "1.0.1"
 bs58 = { version = "0.4", default-features = false, features = ["check", "alloc"] }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }

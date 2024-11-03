@@ -116,9 +116,9 @@ dependencies = [
 
 [[package]]
 name = "anychain-core"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b8d778a8e96264d67f31d278628b60c37403d120dce8c81168a430c7bd1ff10"
+checksum = "df173bb40a48a7d64076727c468a029e74e965c05ce15f8575b5505cc2462100"
 dependencies = [
  "base58",
  "bech32",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "anychain-solana"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anychain-core",
  "anyhow",
