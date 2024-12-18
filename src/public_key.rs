@@ -59,8 +59,6 @@ impl fmt::Display for SolanaPublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anychain_core::PublicKey;
-    use ed25519_dalek::{KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 
     #[test]
     fn test_public_key_from_str() {
