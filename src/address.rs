@@ -5,6 +5,7 @@ use {
         fmt::{Display, Formatter, Result as FmtResult},
         str::FromStr,
     },
+    curve25519_dalek::Scalar,
     ed25519_dalek::PUBLIC_KEY_LENGTH,
     solana_sdk::pubkey::Pubkey,
     spl_associated_token_account::get_associated_token_address,
@@ -26,7 +27,7 @@ impl SolanaAddress {
 }
 
 impl Address for SolanaAddress {
-    type SecretKey = ed25519_dalek::SecretKey;
+    type SecretKey = Scalar;
     type Format = SolanaFormat;
     type PublicKey = SolanaPublicKey;
 
@@ -81,7 +82,7 @@ impl Display for SolanaAddress {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{SecretKey, KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
+    use ed25519_dalek::{KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 
     #[test]
     fn test_address_alice() {
@@ -94,12 +95,13 @@ mod tests {
 
         let mut secret_bytes: [u8; PUBLIC_KEY_LENGTH] = [0u8; SECRET_KEY_LENGTH];
         secret_bytes.copy_from_slice(&keypair_bytes[0..SECRET_KEY_LENGTH]);
-        let secret_key: SecretKey = SecretKey::from_bytes(&secret_bytes).unwrap();
+
+        let secret_key = Scalar::from_bytes_mod_order(secret_bytes);
 
         let address =
             SolanaAddress::from_secret_key(&secret_key, &SolanaFormat::default()).unwrap();
         assert_eq!(
-            "EpFLfuH524fk9QP9i9uL9AHtX6smBaxaMHwek9T11nK5",
+            "8tR45MbTcEq1W4dMXnwe7KW7xqykNxnyoBQoASMtqHK",
             address.to_string()
         );
     }
@@ -115,12 +117,13 @@ mod tests {
 
         let mut secret_bytes: [u8; PUBLIC_KEY_LENGTH] = [0u8; SECRET_KEY_LENGTH];
         secret_bytes.copy_from_slice(&keypair_bytes[0..SECRET_KEY_LENGTH]);
-        let secret_key: SecretKey = SecretKey::from_bytes(&secret_bytes).unwrap();
+        let secret_key = Scalar::from_bytes_mod_order(secret_bytes);
 
         let address =
             SolanaAddress::from_secret_key(&secret_key, &SolanaFormat::default()).unwrap();
+
         assert_eq!(
-            "D3AfQC64W8xCqwH1y94dQY4JLG6HQx6uLoHk9V6qqAKr",
+            "DPCG5xKuxK3NCL8FTn8h2vFharp9MbYmUZeSA2eLx4RG",
             address.to_string()
         );
     }
