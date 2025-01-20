@@ -65,10 +65,6 @@ impl FromStr for SolanaAddress {
         if pubkey_vec.len() != PUBLIC_KEY_LENGTH {
             return Err(AddressError::InvalidAddress(addr.to_string()));
         }
-        let buffer: [u8; PUBLIC_KEY_LENGTH] = pubkey_vec.as_slice().try_into().unwrap();
-        let _ = ed25519_dalek::PublicKey::from_bytes(&buffer)
-            .map_err(|error| AddressError::Message(error.to_string()))?;
-
         Ok(Self(addr.to_string()))
     }
 }
