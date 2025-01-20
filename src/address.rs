@@ -123,4 +123,14 @@ mod tests {
             address.to_string()
         );
     }
+
+    #[test]
+    fn test_is_valid_address() {
+        assert!(SolanaAddress::is_valid(
+            "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN"
+        ));
+        assert!(SolanaAddress::is_valid(
+            "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+        ));
+    }
 }
