@@ -2,7 +2,7 @@ use {
     crate::{address::SolanaAddress, format::SolanaFormat},
     anychain_core::{Address, AddressError, PublicKey, PublicKeyError},
     core::{convert::TryInto, fmt, str::FromStr},
-    curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE as G, Scalar},
+    curve25519_dalek::{Scalar, constants::ED25519_BASEPOINT_TABLE as G},
     ed25519_dalek::PUBLIC_KEY_LENGTH,
     group::GroupEncoding,
 };

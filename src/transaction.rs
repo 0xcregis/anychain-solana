@@ -5,7 +5,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::Signature,
-    system_instruction::{transfer as sol_transfer, SystemInstruction},
+    system_instruction::{SystemInstruction, transfer as sol_transfer},
     transaction::Transaction as Tx,
 };
 use spl_associated_token_account::{
@@ -13,7 +13,7 @@ use spl_associated_token_account::{
 };
 use spl_token::{
     id,
-    instruction::{transfer_checked as token_transfer, TokenInstruction},
+    instruction::{TokenInstruction, transfer_checked as token_transfer},
 };
 use std::{fmt, str::FromStr};
 
@@ -96,7 +96,7 @@ impl Transaction for SolanaTransaction {
                     None => {
                         return Err(TransactionError::Message(
                             "'decimal' is not provided".to_string(),
-                        ))
+                        ));
                     }
                 };
                 let ixs = match self.params.has_token_account {
@@ -133,7 +133,7 @@ impl Transaction for SolanaTransaction {
                     None => {
                         return Err(TransactionError::Message(
                             "'has_token_account' is not provided".to_string(),
-                        ))
+                        ));
                     }
                 };
                 Message::new_with_blockhash(&ixs, Some(&from), &blockhash)

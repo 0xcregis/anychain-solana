@@ -1,11 +1,11 @@
 [package]
 name = "anychain-solana"
 description = "A Rust library for Solana-focused cryptocurrency wallets, enabling seamless transactions on the Solana blockchain"
-version = "0.1.13"
+version = "0.1.14"
 keywords = ["solana", "blockchain", "wallet", "transactions"]
 categories = ["cryptography::cryptocurrencies"]
 authors = ["Shawndslee", "cregis.com"]
-edition = "2021"
+edition = "2024"
 homepage = "https://www.cregis.com"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/0xcregis/anychain"
