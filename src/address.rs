@@ -18,9 +18,8 @@ pub struct SolanaAddress(pub String);
 impl SolanaAddress {
     pub fn associated_token_address(&self, token: String) -> Result<String, AddressError> {
         let address =
-            Pubkey::from_str(&self.0).map_err(|e| AddressError::Message(format!("{}", e)))?;
-        let token =
-            Pubkey::from_str(&token).map_err(|e| AddressError::Message(format!("{}", e)))?;
+            Pubkey::from_str(&self.0).map_err(|e| AddressError::Message(format!("{e}")))?;
+        let token = Pubkey::from_str(&token).map_err(|e| AddressError::Message(format!("{e}")))?;
         let associated_token_address = get_associated_token_address(&address, &token);
         Ok(associated_token_address.to_string())
     }
@@ -61,7 +60,7 @@ impl FromStr for SolanaAddress {
         }
         let pubkey_vec = bs58::decode(addr)
             .into_vec()
-            .map_err(|error| PublicKeyError::Crate("base58", format!("{:?}", error)))?;
+            .map_err(|error| PublicKeyError::Crate("base58", format!("{error:?}")))?;
         if pubkey_vec.len() != PUBLIC_KEY_LENGTH {
             return Err(AddressError::InvalidAddress(addr.to_string()));
         }

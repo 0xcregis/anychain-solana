@@ -39,7 +39,7 @@ impl FromStr for SolanaTransaction {
     fn from_str(tx: &str) -> Result<Self, Self::Err> {
         let tx = bs58::decode(tx)
             .into_vec()
-            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+            .map_err(|e| TransactionError::Message(format!("{e}")))?;
         SolanaTransaction::from_bytes(&tx)
     }
 }
@@ -158,7 +158,7 @@ impl Transaction for SolanaTransaction {
 
     fn from_bytes(tx: &[u8]) -> Result<Self, TransactionError> {
         let tx = bincode::deserialize::<Tx>(tx)
-            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+            .map_err(|e| TransactionError::Message(format!("{e}")))?;
 
         let sig = if !tx.signatures.is_empty() {
             let rs = tx.signatures[0];
@@ -178,13 +178,13 @@ impl Transaction for SolanaTransaction {
                 let program = keys[ixs[0].program_id_index as usize];
                 let account = &ixs[0].accounts;
                 let data = &ixs[0].data;
-                match format!("{}", program).as_str() {
+                match format!("{program}").as_str() {
                     "11111111111111111111111111111111" => {
                         let from = keys[account[0] as usize];
                         let to = keys[account[1] as usize];
 
                         let ix = bincode::deserialize::<SystemInstruction>(data)
-                            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+                            .map_err(|e| TransactionError::Message(format!("{e}")))?;
 
                         match ix {
                             SystemInstruction::Transfer { lamports } => {
@@ -202,8 +202,7 @@ impl Transaction for SolanaTransaction {
                                 Ok(tx)
                             }
                             _ => Err(TransactionError::Message(format!(
-                                "Unsupported system instruction: {:?}",
-                                ix
+                                "Unsupported system instruction: {ix:?}"
                             ))),
                         }
                     }
@@ -213,7 +212,7 @@ impl Transaction for SolanaTransaction {
                         let from = keys[account[3] as usize];
 
                         let ix = TokenInstruction::unpack(data)
-                            .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+                            .map_err(|e| TransactionError::Message(format!("{e}")))?;
 
                         match ix {
                             TokenInstruction::TransferChecked { amount, decimals } => {
@@ -231,14 +230,12 @@ impl Transaction for SolanaTransaction {
                                 Ok(tx)
                             }
                             _ => Err(TransactionError::Message(format!(
-                                "Unsupported token instruction: {:?}",
-                                ix
+                                "Unsupported token instruction: {ix:?}"
                             ))),
                         }
                     }
                     _ => Err(TransactionError::Message(format!(
-                        "Unsupported program {}",
-                        program
+                        "Unsupported program {program}"
                     ))),
                 }
             }
@@ -246,20 +243,16 @@ impl Transaction for SolanaTransaction {
                 let program1 = keys[ixs[0].program_id_index as usize];
                 let program2 = keys[ixs[1].program_id_index as usize];
 
-                if format!("{}", program1).as_str()
-                    != "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+                if format!("{program1}").as_str() != "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
                 {
                     return Err(TransactionError::Message(format!(
-                        "Unsupported first program {}",
-                        program1
+                        "Unsupported first program {program1}"
                     )));
                 }
 
-                if format!("{}", program2).as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-                {
+                if format!("{program2}").as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" {
                     return Err(TransactionError::Message(format!(
-                        "Unsupported second program {}",
-                        program2
+                        "Unsupported second program {program2}"
                     )));
                 }
 
@@ -271,7 +264,7 @@ impl Transaction for SolanaTransaction {
                 let token_address = keys[account[3] as usize];
 
                 let ix = TokenInstruction::unpack(data)
-                    .map_err(|e| TransactionError::Message(format!("{}", e)))?;
+                    .map_err(|e| TransactionError::Message(format!("{e}")))?;
 
                 match ix {
                     TokenInstruction::TransferChecked { amount, decimals } => {
@@ -289,8 +282,7 @@ impl Transaction for SolanaTransaction {
                         Ok(tx)
                     }
                     _ => Err(TransactionError::Message(format!(
-                        "Unsupported token instruction: {:?}",
-                        ix
+                        "Unsupported token instruction: {ix:?}"
                     ))),
                 }
             }
@@ -320,5 +312,5 @@ fn test() {
     let tx = "BU8oN58NjvzGdbuQ8zGKF9cJ7N25iWRRgnLodf42gEVDnzcQ3g5y7eygBviCRQHH4sC335gt575JA2NfjpX3P7m1vZ5WYWxHem7wW3Pc4S6YYi4ftivYiGqTMr6eKtUVCbBZabwyMuZ7iGjUtTB6L7LnfQj6wGduNUqwpGPy2xD8aFps6zRfgwNAXe9tpoa3tQvTnyU8WgkpiZjkBFdfXFw8abhsUZLZsxaYra2CHmqrXwG6VFUfhTdYANPTXcBcZ2a75RmqC19d5rYJPexmpGJV529A4WXgE4Pm5Gk5AUB7LcNmAxfkKxJk3ikGohb9n3B7vJ3T9zJZg4i6xEGapobavsLwMuYkCjnRBQ69rouMCJEtz33XNuwx1ZN84cGimZV1KSbwQgcPDFzgdZR2ZisViDWAJUXkadfCfADNEME1jxmHDy7oX9gTYJvkeZAnoFjxVhKrVZft8FaADcRgNcdZJPdt9rMMSpCJXBFgBVsGaqo6iteJqg79qQrEoScRviUh6scB7iwCh";
     let tx = SolanaTransaction::from_str(tx).unwrap();
     let txid = tx.to_transaction_id().unwrap();
-    println!("{}", txid);
+    println!("{txid}");
 }

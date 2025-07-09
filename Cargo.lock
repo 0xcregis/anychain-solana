@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "anychain-solana"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "anychain-core",
  "anyhow",

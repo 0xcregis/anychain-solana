@@ -23,12 +23,11 @@ pub fn generate_keypair_from_mnemonic(mnemonic_str: &str) -> Keypair {
     let seed = Seed::new(&mnemonic, passphrase);
 
     let derivation_path = None;
-    let keypair = match derivation_path {
+    match derivation_path {
         Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path),
         None => keypair_from_seed(seed.as_bytes()),
     }
-    .unwrap();
-    keypair
+    .unwrap()
 }
 
 /// use a single invocation of SystemInstruction::CreateAccount to create a new account,
@@ -59,7 +58,7 @@ pub fn create_account(
     );
 
     let sig = rpc_client.send_and_confirm_transaction(&transaction)?;
-    println!("{}", sig);
+    println!("{sig}");
 
     Ok(())
 }
@@ -167,7 +166,7 @@ fn main() -> anyhow::Result<()> {
 
     let res = rpc_client.get_account(&bob_pubkey);
     match res {
-        Ok(account_info) => println!("Account found: {:?}", account_info),
+        Ok(account_info) => println!("Account found: {account_info:?}"),
         Err(e) => match e.kind() {
             /*
             Bob Solana Account does not exist
@@ -185,7 +184,7 @@ fn main() -> anyhow::Result<()> {
                 let _ =
                     create_account(&rpc_client, &alice_keypair, blockhash, &bob_keypair, 0usize);
             }
-            _ => println!("Error fetching account: {:?}", e),
+            _ => println!("Error fetching account: {e:?}"),
         },
     }
 

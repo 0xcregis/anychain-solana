@@ -39,13 +39,13 @@ impl FromStr for SolanaPublicKey {
         }
         let pubkey_vec = bs58::decode(s)
             .into_vec()
-            .map_err(|error| PublicKeyError::Crate("base58", format!("{:?}", error)))?;
+            .map_err(|error| PublicKeyError::Crate("base58", format!("{error:?}")))?;
         if pubkey_vec.len() != PUBLIC_KEY_LENGTH {
             return Err(PublicKeyError::InvalidByteLength(pubkey_vec.len()));
         }
         let buffer: [u8; PUBLIC_KEY_LENGTH] = pubkey_vec.as_slice().try_into().unwrap();
         let verifying_key = ed25519_dalek::PublicKey::from_bytes(&buffer)
-            .map_err(|error| PublicKeyError::Crate("base58", format!("{:?}", error)))?;
+            .map_err(|error| PublicKeyError::Crate("base58", format!("{error:?}")))?;
         Ok(SolanaPublicKey(verifying_key))
     }
 }
