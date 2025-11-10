@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use bip39::{Mnemonic, Seed};
 use solana_rpc_client::rpc_client::RpcClient;
 use solana_sdk::{

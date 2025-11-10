@@ -11,7 +11,7 @@ use {
 pub const MAX_BASE58_LEN: usize = 44;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SolanaPublicKey(pub ed25519_dalek::PublicKey);
+pub struct SolanaPublicKey(pub ed25519_dalek::VerifyingKey);
 
 impl PublicKey for SolanaPublicKey {
     type SecretKey = Scalar;
@@ -21,7 +21,7 @@ impl PublicKey for SolanaPublicKey {
     fn from_secret_key(secret_key: &Self::SecretKey) -> Self {
         let public_key = secret_key * G;
         let public_key = public_key.to_bytes();
-        let public_key = ed25519_dalek::PublicKey::from_bytes(&public_key).unwrap();
+        let public_key = ed25519_dalek::VerifyingKey::from_bytes(&public_key).unwrap();
         SolanaPublicKey(public_key)
     }
 
@@ -44,7 +44,7 @@ impl FromStr for SolanaPublicKey {
             return Err(PublicKeyError::InvalidByteLength(pubkey_vec.len()));
         }
         let buffer: [u8; PUBLIC_KEY_LENGTH] = pubkey_vec.as_slice().try_into().unwrap();
-        let verifying_key = ed25519_dalek::PublicKey::from_bytes(&buffer)
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&buffer)
             .map_err(|error| PublicKeyError::Crate("base58", format!("{error:?}")))?;
         Ok(SolanaPublicKey(verifying_key))
     }
