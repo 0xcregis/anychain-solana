@@ -15,7 +15,8 @@ name = "create-account"
 path = "examples/create-account.rs"
 
 [dependencies]
-anychain-core = { version = "0.1.8" }
+#anychain-core = { version = "0.1.8" }
+anychain-core = { git = "https://github.com/0xcregis/anychain", branch = "382-fix-ed25519-dalek-101-deps" }
 curve25519-dalek = { version = "4.1.3", features = ["group"] }
 ed25519-dalek = { version = "2", features = ["hazmat"] }
 bs58 = { version = "0.5.1", default-features = false, features = ["check", "alloc"] }

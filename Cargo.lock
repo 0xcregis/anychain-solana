@@ -89,8 +89,7 @@ dependencies = [
 [[package]]
 name = "anychain-core"
 version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e146f6b6b6a92a3264a566c804935d0ebcb8486390cd84581324c851c9e1bece"
+source = "git+https://github.com/0xcregis/anychain?branch=382-fix-ed25519-dalek-101-deps#9cbbbd9e26e17c2b2f2d5fd22e14aee88e555211"
 dependencies = [
  "base58",
  "bech32",
