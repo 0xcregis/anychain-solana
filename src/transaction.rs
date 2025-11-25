@@ -1,13 +1,10 @@
 use crate::{SolanaAddress, SolanaFormat, SolanaPublicKey};
 use anychain_core::{Transaction, TransactionError, TransactionId};
 use solana_sdk::{
-    hash::Hash,
-    message::Message,
-    pubkey::Pubkey,
-    signature::Signature,
-    system_instruction::{SystemInstruction, transfer as sol_transfer},
+    hash::Hash, message::Message, pubkey::Pubkey, signature::Signature,
     transaction::Transaction as Tx,
 };
+use solana_system_interface::instruction::{SystemInstruction, transfer as sol_transfer};
 use spl_associated_token_account::{
     get_associated_token_address, instruction::create_associated_token_account,
 };

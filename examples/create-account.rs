@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use bip39::{Mnemonic, Seed};
 use solana_rpc_client::rpc_client::RpcClient;
 use solana_sdk::{
@@ -8,9 +10,10 @@ use solana_sdk::{
         keypair::Keypair,
         keypair::{keypair_from_seed, keypair_from_seed_and_derivation_path},
     },
-    system_instruction, system_program,
     transaction::Transaction,
 };
+use solana_sdk_ids::system_program;
+use solana_system_interface::instruction as system_instruction;
 use spl_associated_token_account::{
     get_associated_token_address, instruction::create_associated_token_account,
 };
@@ -141,12 +144,15 @@ pub fn transfer_spl_token(
 
 fn main() -> anyhow::Result<()> {
     let rpc_client = RpcClient::new("https://api.testnet.solana.com".to_string());
-    let alice_keypair = Keypair::from_bytes(&[
-        41, 196, 252, 146, 80, 100, 13, 46, 69, 89, 172, 157, 224, 135, 23, 62, 54, 65, 52, 68, 14,
-        50, 112, 112, 156, 210, 24, 236, 139, 169, 38, 63, 205, 66, 112, 255, 116, 177, 79, 182,
-        192, 20, 240, 193, 219, 162, 23, 149, 26, 247, 181, 186, 145, 168, 26, 232, 228, 76, 102,
-        109, 64, 189, 172, 44,
-    ])
+    let alice_keypair = Keypair::try_from(
+        [
+            41, 196, 252, 146, 80, 100, 13, 46, 69, 89, 172, 157, 224, 135, 23, 62, 54, 65, 52, 68,
+            14, 50, 112, 112, 156, 210, 24, 236, 139, 169, 38, 63, 205, 66, 112, 255, 116, 177, 79,
+            182, 192, 20, 240, 193, 219, 162, 23, 149, 26, 247, 181, 186, 145, 168, 26, 232, 228,
+            76, 102, 109, 64, 189, 172, 44,
+        ]
+        .as_ref(),
+    )
     .unwrap();
 
     let alice_pubkey: Pubkey = alice_keypair.pubkey();
