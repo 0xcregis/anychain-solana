@@ -91,10 +91,8 @@ impl Transaction for SolanaTransaction {
                 let token = Pubkey::from_str(&token.0).unwrap();
                 let program_id = Pubkey::from_str(&program_id).unwrap();
 
-                let src =
-                    get_associated_token_address_with_program_id(&from, &token, &program_id);
-                let dest =
-                    get_associated_token_address_with_program_id(&to, &token, &program_id);
+                let src = get_associated_token_address_with_program_id(&from, &token, &program_id);
+                let dest = get_associated_token_address_with_program_id(&to, &token, &program_id);
                 let ixs = match has_token_account {
                     true => {
                         let ix_transfer = token_transfer(
@@ -198,8 +196,8 @@ impl Transaction for SolanaTransaction {
                             ))),
                         }
                     }
-                    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" |
-                    "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" => {
+                    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                    | "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" => {
                         let token = keys[account[1] as usize];
                         let dest = keys[account[2] as usize];
                         let from = keys[account[3] as usize];
@@ -244,8 +242,10 @@ impl Transaction for SolanaTransaction {
                     )));
                 }
 
-                if format!("{program2}").as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" &&
-                format!("{program2}").as_str() != "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" {
+                if format!("{program2}").as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                    && format!("{program2}").as_str()
+                        != "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+                {
                     return Err(TransactionError::Message(format!(
                         "Unsupported second program {program2}"
                     )));
