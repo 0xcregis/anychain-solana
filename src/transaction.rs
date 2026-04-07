@@ -6,17 +6,15 @@ use solana_sdk::{
 };
 use solana_system_interface::instruction::{SystemInstruction, transfer as sol_transfer};
 use spl_associated_token_account::{
-    get_associated_token_address, instruction::create_associated_token_account,
+    get_associated_token_address_with_program_id, instruction::create_associated_token_account,
 };
-use spl_token::{
-    id,
-    instruction::{TokenInstruction, transfer_checked as token_transfer},
-};
+use spl_token::instruction::{TokenInstruction, transfer_checked as token_transfer};
 use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransactionParameters {
     pub token: Option<SolanaAddress>,
+    pub program_id: Option<String>,
     pub has_token_account: Option<bool>,
     pub decimals: Option<u8>,
     pub from: SolanaAddress,
@@ -83,23 +81,22 @@ impl Transaction for SolanaTransaction {
         let amount = self.params.amount;
         let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
 
-        let msg = match &self.params.token {
-            Some(token) => {
+        let token = self.params.token.clone();
+        let program_id = self.params.program_id.clone();
+        let has_token_account = self.params.has_token_account;
+        let decimals = self.params.decimals;
+
+        let msg = match (token, program_id, has_token_account, decimals) {
+            (Some(token), Some(program_id), Some(has_token_account), Some(decimals)) => {
                 let token = Pubkey::from_str(&token.0).unwrap();
-                let src = get_associated_token_address(&from, &token);
-                let dest = get_associated_token_address(&to, &token);
-                let decimals = match self.params.decimals {
-                    Some(d) => d,
-                    None => {
-                        return Err(TransactionError::Message(
-                            "'decimal' is not provided".to_string(),
-                        ));
-                    }
-                };
-                let ixs = match self.params.has_token_account {
-                    Some(true) => {
+                let program_id = Pubkey::from_str(&program_id).unwrap();
+
+                let src = get_associated_token_address_with_program_id(&from, &token, &program_id);
+                let dest = get_associated_token_address_with_program_id(&to, &token, &program_id);
+                let ixs = match has_token_account {
+                    true => {
                         let ix_transfer = token_transfer(
-                            &id(),
+                            &program_id,
                             &src,
                             &token,
                             &dest,
@@ -111,11 +108,11 @@ impl Transaction for SolanaTransaction {
                         .unwrap();
                         vec![ix_transfer]
                     }
-                    Some(false) => {
+                    false => {
                         let ix_create_account =
-                            create_associated_token_account(&from, &to, &token, &id());
+                            create_associated_token_account(&from, &to, &token, &program_id);
                         let ix_transfer = token_transfer(
-                            &id(),
+                            &program_id,
                             &src,
                             &token,
                             &dest,
@@ -127,15 +124,10 @@ impl Transaction for SolanaTransaction {
                         .unwrap();
                         vec![ix_create_account, ix_transfer]
                     }
-                    None => {
-                        return Err(TransactionError::Message(
-                            "'has_token_account' is not provided".to_string(),
-                        ));
-                    }
                 };
                 Message::new_with_blockhash(&ixs, Some(&from), &blockhash)
             }
-            None => {
+            _ => {
                 let ix = sol_transfer(&from, &to, amount);
                 Message::new_with_blockhash(&[ix], Some(&from), &blockhash)
             }
@@ -187,6 +179,7 @@ impl Transaction for SolanaTransaction {
                             SystemInstruction::Transfer { lamports } => {
                                 let params = SolanaTransactionParameters {
                                     token: None,
+                                    program_id: None,
                                     has_token_account: None,
                                     decimals: None,
                                     from: SolanaAddress(from.to_string()),
@@ -203,7 +196,8 @@ impl Transaction for SolanaTransaction {
                             ))),
                         }
                     }
-                    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" => {
+                    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                    | "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" => {
                         let token = keys[account[1] as usize];
                         let dest = keys[account[2] as usize];
                         let from = keys[account[3] as usize];
@@ -215,6 +209,7 @@ impl Transaction for SolanaTransaction {
                             TokenInstruction::TransferChecked { amount, decimals } => {
                                 let params = SolanaTransactionParameters {
                                     token: Some(SolanaAddress(token.to_string())),
+                                    program_id: Some(format!("{program}")),
                                     has_token_account: Some(true),
                                     decimals: Some(decimals),
                                     from: SolanaAddress(from.to_string()),
@@ -247,7 +242,10 @@ impl Transaction for SolanaTransaction {
                     )));
                 }
 
-                if format!("{program2}").as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" {
+                if format!("{program2}").as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                    && format!("{program2}").as_str()
+                        != "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+                {
                     return Err(TransactionError::Message(format!(
                         "Unsupported second program {program2}"
                     )));
@@ -267,6 +265,7 @@ impl Transaction for SolanaTransaction {
                     TokenInstruction::TransferChecked { amount, decimals } => {
                         let params = SolanaTransactionParameters {
                             token: Some(SolanaAddress(token_address.to_string())),
+                            program_id: Some(format!("{program2}")),
                             has_token_account: Some(false),
                             decimals: Some(decimals),
                             from: SolanaAddress(funding_address.to_string()),
