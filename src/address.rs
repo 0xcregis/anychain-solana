@@ -8,7 +8,7 @@ use {
     curve25519_dalek::Scalar,
     ed25519_dalek::PUBLIC_KEY_LENGTH,
     solana_sdk::pubkey::Pubkey,
-    spl_associated_token_account::get_associated_token_address,
+    spl_associated_token_account::get_associated_token_address_with_program_id,
 };
 
 /// Represents a Solana address
@@ -16,11 +16,18 @@ use {
 pub struct SolanaAddress(pub String);
 
 impl SolanaAddress {
-    pub fn associated_token_address(&self, token: String) -> Result<String, AddressError> {
+    pub fn associated_token_address(
+        &self,
+        token: String,
+        program_id: String,
+    ) -> Result<String, AddressError> {
         let address =
             Pubkey::from_str(&self.0).map_err(|e| AddressError::Message(format!("{e}")))?;
         let token = Pubkey::from_str(&token).map_err(|e| AddressError::Message(format!("{e}")))?;
-        let associated_token_address = get_associated_token_address(&address, &token);
+        let program_id =
+            Pubkey::from_str(&program_id).map_err(|e| AddressError::Message(format!("{e}")))?;
+        let associated_token_address =
+            get_associated_token_address_with_program_id(&address, &token, &program_id);
         Ok(associated_token_address.to_string())
     }
 }
