@@ -377,17 +377,8 @@ mod tests {
 
     use super::*;
 
-    const MAINNET: &str = "https://api.mainnet-beta.solana.com";
-    const TESTNET: &str = "https://api.testnet.solana.com";
-    const DEVNET: &str = "https://api.devnet.solana.com";
-
     #[test]
     fn test_tx_gen() {
-        use solana_rpc_client::rpc_client::RpcClient;
-        
-        let client = RpcClient::new(DEVNET);
-        let blockhash = client.get_latest_blockhash().unwrap().to_string();
-
         let from = "HQ2SDwyaRtbpV57dL5q21fWWKzYn53EnDeG2y2EgzHkS";
         let to = "A9wA1dAog9XNeS33QJxHwtWQGCMokdXKa5aGyCy1nPDD";
         let fee_payer = "6PJHXT7pQvrXBTDUTmR9gN4ZrXLHoQ4uDNLBwNB7YYN9";
@@ -401,7 +392,7 @@ mod tests {
             from: SolanaAddress(from.to_string()),
             to: SolanaAddress(to.to_string()),
             amount: 1000000000,
-            blockhash,
+            blockhash: "6ZYbfeFjSiZBpEA9A17gThKXFWJkbgWTwJcqPMpBLEsL".to_string(),
         };
 
         let mut tx = SolanaTransaction::new(&params).unwrap();
