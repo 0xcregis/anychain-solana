@@ -69,6 +69,19 @@ fn get_sig(sig: &Vec<u8>) -> Result<Signature, TransactionError> {
     Ok(Signature::from(_sig))
 }
 
+impl SolanaTransaction {
+    pub fn sign_fee_payer(&mut self, sig: Vec<u8>) -> Result<Vec<u8>, TransactionError> {
+        if sig.len() != 64 {
+            return Err(TransactionError::Message(format!(
+                "Invalid signature length {}",
+                sig.len(),
+            )));
+        }
+        self.sig_fee_payer = Some(sig);
+        self.to_bytes()
+    }
+}
+
 impl Transaction for SolanaTransaction {
     type Address = SolanaAddress;
     type Format = SolanaFormat;
