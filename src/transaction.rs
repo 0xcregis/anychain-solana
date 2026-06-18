@@ -14,9 +14,10 @@ use std::{fmt, str::FromStr};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransactionParameters {
     pub token: Option<SolanaAddress>,
-    pub program_id: Option<String>,
+    pub program_id: Option<SolanaAddress>,
     pub has_token_account: Option<bool>,
     pub decimals: Option<u8>,
+    pub fee_payer: Option<SolanaAddress>,
     pub from: SolanaAddress,
     pub to: SolanaAddress,
     pub amount: u64,
@@ -26,7 +27,8 @@ pub struct SolanaTransactionParameters {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SolanaTransaction {
     pub params: SolanaTransactionParameters,
-    pub signature: Option<Vec<u8>>,
+    pub sig_fee_payer: Option<Vec<u8>>,
+    pub sig_from: Option<Vec<u8>>,
 }
 
 impl FromStr for SolanaTransaction {
@@ -50,6 +52,36 @@ impl fmt::Display for SolanaTransactionId {
 
 impl TransactionId for SolanaTransactionId {}
 
+fn address_unwrap(address: &SolanaAddress) -> Result<Pubkey, TransactionError> {
+    Pubkey::from_str(&address.0)
+        .map_err(|e| TransactionError::Message(format!("Invalid address: {e}")))
+}
+
+fn get_sig(sig: &Vec<u8>) -> Result<Signature, TransactionError> {
+    if sig.len() != 64 {
+        return Err(TransactionError::Message(format!(
+            "Invalid signature length {}",
+            sig.len(),
+        )));
+    }
+    let mut _sig = [0u8; 64];
+    _sig.copy_from_slice(sig.as_slice());
+    Ok(Signature::from(_sig))
+}
+
+impl SolanaTransaction {
+    pub fn sign_fee_payer(&mut self, sig: Vec<u8>) -> Result<(), TransactionError> {
+        if sig.len() != 64 {
+            return Err(TransactionError::Message(format!(
+                "Invalid signature length {}",
+                sig.len(),
+            )));
+        }
+        self.sig_fee_payer = Some(sig);
+        Ok(())
+    }
+}
+
 impl Transaction for SolanaTransaction {
     type Address = SolanaAddress;
     type Format = SolanaFormat;
@@ -60,7 +92,8 @@ impl Transaction for SolanaTransaction {
     fn new(params: &Self::TransactionParameters) -> Result<Self, TransactionError> {
         Ok(SolanaTransaction {
             params: params.clone(),
-            signature: None,
+            sig_from: None,
+            sig_fee_payer: None,
         })
     }
 
@@ -71,26 +104,35 @@ impl Transaction for SolanaTransaction {
                 rs.len(),
             )));
         }
-        self.signature = Some(rs);
+        self.sig_from = Some(rs);
         self.to_bytes()
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, TransactionError> {
-        let from = Pubkey::from_str(&self.params.from.0).unwrap();
-        let to = Pubkey::from_str(&self.params.to.0).unwrap();
+        let from = address_unwrap(&self.params.from)?;
+        let to = address_unwrap(&self.params.to)?;
         let amount = self.params.amount;
-        let blockhash = Hash::from_str(&self.params.blockhash).unwrap();
+        let blockhash = Hash::from_str(&self.params.blockhash)
+            .map_err(|e| TransactionError::Message(e.to_string()))?;
 
-        let token = self.params.token.clone();
-        let program_id = self.params.program_id.clone();
+        let token = match &self.params.token {
+            Some(token) => Some(address_unwrap(token)?),
+            None => None,
+        };
+        let program_id = match &self.params.program_id {
+            Some(pid) => Some(address_unwrap(pid)?),
+            None => None,
+        };
         let has_token_account = self.params.has_token_account;
         let decimals = self.params.decimals;
 
+        let fee_payer = match &self.params.fee_payer {
+            Some(fee_payer) => address_unwrap(fee_payer)?,
+            None => address_unwrap(&self.params.from)?,
+        };
+
         let msg = match (token, program_id, has_token_account, decimals) {
             (Some(token), Some(program_id), Some(has_token_account), Some(decimals)) => {
-                let token = Pubkey::from_str(&token.0).unwrap();
-                let program_id = Pubkey::from_str(&program_id).unwrap();
-
                 let src = get_associated_token_address_with_program_id(&from, &token, &program_id);
                 let dest = get_associated_token_address_with_program_id(&to, &token, &program_id);
                 let ixs = match has_token_account {
@@ -110,7 +152,7 @@ impl Transaction for SolanaTransaction {
                     }
                     false => {
                         let ix_create_account =
-                            create_associated_token_account(&from, &to, &token, &program_id);
+                            create_associated_token_account(&fee_payer, &to, &token, &program_id);
                         let ix_transfer = token_transfer(
                             &program_id,
                             &src,
@@ -125,20 +167,28 @@ impl Transaction for SolanaTransaction {
                         vec![ix_create_account, ix_transfer]
                     }
                 };
-                Message::new_with_blockhash(&ixs, Some(&from), &blockhash)
+                Message::new_with_blockhash(&ixs, Some(&fee_payer), &blockhash)
             }
             _ => {
                 let ix = sol_transfer(&from, &to, amount);
-                Message::new_with_blockhash(&[ix], Some(&from), &blockhash)
+                Message::new_with_blockhash(&[ix], Some(&fee_payer), &blockhash)
             }
         };
 
-        match &self.signature {
-            Some(rs) => {
+        match &self.sig_from {
+            Some(sig_from) => {
+                let sig_from = get_sig(sig_from)?;
+
+                let sigs = match &self.sig_fee_payer {
+                    Some(sig_fee_payer) => {
+                        let sig_fee_payer = get_sig(sig_fee_payer)?;
+                        vec![sig_fee_payer, sig_from]
+                    }
+                    None => vec![sig_from],
+                };
+
                 let mut tx = Tx::new_unsigned(msg);
-                let mut sig = [0u8; 64];
-                sig.copy_from_slice(rs.as_slice());
-                tx.signatures = vec![Signature::from(sig)];
+                tx.signatures = sigs;
                 Ok(bincode::serialize(&tx).unwrap())
             }
             None => Ok(msg.serialize()),
@@ -149,16 +199,36 @@ impl Transaction for SolanaTransaction {
         let tx = bincode::deserialize::<Tx>(tx)
             .map_err(|e| TransactionError::Message(format!("{e}")))?;
 
-        let sig = if !tx.signatures.is_empty() {
-            let rs = tx.signatures[0];
-            let mut sig = [0u8; 64];
-            sig.copy_from_slice(rs.as_ref());
-            Some(sig.to_vec())
-        } else {
-            None
+        let (sig_payer, sig_from) = match tx.signatures.len() {
+            0 => (None, None),
+            1 => {
+                let sig = tx.signatures[0];
+                let mut sig_from = [0u8; 64];
+                sig_from.copy_from_slice(sig.as_ref());
+                (None, Some(sig_from.to_vec()))
+            }
+            2 => {
+                let sig_fee_payer = tx.signatures[0];
+                let sig_from = tx.signatures[1];
+                let mut _sig_fee_payer = [0u8; 64];
+                let mut _sig_from = [0u8; 64];
+                _sig_fee_payer.copy_from_slice(sig_fee_payer.as_ref());
+                _sig_from.copy_from_slice(sig_from.as_ref());
+                (Some(_sig_fee_payer.to_vec()), Some(_sig_from.to_vec()))
+            }
+            _ => {
+                return Err(TransactionError::Message(format!(
+                    "Unsupported signature amount: {}",
+                    tx.signatures.len()
+                )));
+            }
         };
 
         let keys = tx.message.account_keys;
+        let fee_payer = sig_payer
+            .as_ref()
+            .map(|_| SolanaAddress(keys[0].to_string()));
+
         let ixs = tx.message.instructions;
         let blockhash = tx.message.recent_blockhash;
 
@@ -182,13 +252,15 @@ impl Transaction for SolanaTransaction {
                                     program_id: None,
                                     has_token_account: None,
                                     decimals: None,
+                                    fee_payer,
                                     from: SolanaAddress(from.to_string()),
                                     to: SolanaAddress(to.to_string()),
                                     amount: lamports,
                                     blockhash: blockhash.to_string(),
                                 };
                                 let mut tx = SolanaTransaction::new(&params)?;
-                                tx.signature = sig;
+                                tx.sig_from = sig_from;
+                                tx.sig_fee_payer = sig_payer;
                                 Ok(tx)
                             }
                             _ => Err(TransactionError::Message(format!(
@@ -209,16 +281,18 @@ impl Transaction for SolanaTransaction {
                             TokenInstruction::TransferChecked { amount, decimals } => {
                                 let params = SolanaTransactionParameters {
                                     token: Some(SolanaAddress(token.to_string())),
-                                    program_id: Some(format!("{program}")),
+                                    program_id: Some(SolanaAddress(format!("{program}"))),
                                     has_token_account: Some(true),
                                     decimals: Some(decimals),
+                                    fee_payer,
                                     from: SolanaAddress(from.to_string()),
                                     to: SolanaAddress(dest.to_string()),
                                     amount,
                                     blockhash: blockhash.to_string(),
                                 };
                                 let mut tx = SolanaTransaction::new(&params)?;
-                                tx.signature = sig;
+                                tx.sig_from = sig_from;
+                                tx.sig_fee_payer = sig_payer;
                                 Ok(tx)
                             }
                             _ => Err(TransactionError::Message(format!(
@@ -265,16 +339,18 @@ impl Transaction for SolanaTransaction {
                     TokenInstruction::TransferChecked { amount, decimals } => {
                         let params = SolanaTransactionParameters {
                             token: Some(SolanaAddress(token_address.to_string())),
-                            program_id: Some(format!("{program2}")),
+                            program_id: Some(SolanaAddress(format!("{program2}"))),
                             has_token_account: Some(false),
                             decimals: Some(decimals),
+                            fee_payer,
                             from: SolanaAddress(funding_address.to_string()),
                             to: SolanaAddress(funded_address.to_string()),
                             amount,
                             blockhash: blockhash.to_string(),
                         };
                         let mut tx = SolanaTransaction::new(&params)?;
-                        tx.signature = sig;
+                        tx.sig_from = sig_from;
+                        tx.sig_fee_payer = sig_payer;
                         Ok(tx)
                     }
                     _ => Err(TransactionError::Message(format!(
@@ -290,23 +366,65 @@ impl Transaction for SolanaTransaction {
     }
 
     fn to_transaction_id(&self) -> Result<Self::TransactionId, TransactionError> {
-        match &self.signature {
-            Some(sig) => {
+        match (&self.sig_fee_payer, &self.sig_from) {
+            (Some(sig_fee_payer), _) => {
                 let mut txid = [0u8; 64];
-                txid.copy_from_slice(sig);
+                txid.copy_from_slice(sig_fee_payer);
                 Ok(SolanaTransactionId(txid))
             }
-            None => Err(TransactionError::Message(
+            (None, Some(sig_from)) => {
+                let mut txid = [0u8; 64];
+                txid.copy_from_slice(sig_from);
+                Ok(SolanaTransactionId(txid))
+            }
+            _ => Err(TransactionError::Message(
                 "Transaction is not signed".to_string(),
             )),
         }
     }
 }
 
-#[test]
-fn test() {
-    let tx = "BU8oN58NjvzGdbuQ8zGKF9cJ7N25iWRRgnLodf42gEVDnzcQ3g5y7eygBviCRQHH4sC335gt575JA2NfjpX3P7m1vZ5WYWxHem7wW3Pc4S6YYi4ftivYiGqTMr6eKtUVCbBZabwyMuZ7iGjUtTB6L7LnfQj6wGduNUqwpGPy2xD8aFps6zRfgwNAXe9tpoa3tQvTnyU8WgkpiZjkBFdfXFw8abhsUZLZsxaYra2CHmqrXwG6VFUfhTdYANPTXcBcZ2a75RmqC19d5rYJPexmpGJV529A4WXgE4Pm5Gk5AUB7LcNmAxfkKxJk3ikGohb9n3B7vJ3T9zJZg4i6xEGapobavsLwMuYkCjnRBQ69rouMCJEtz33XNuwx1ZN84cGimZV1KSbwQgcPDFzgdZR2ZisViDWAJUXkadfCfADNEME1jxmHDy7oX9gTYJvkeZAnoFjxVhKrVZft8FaADcRgNcdZJPdt9rMMSpCJXBFgBVsGaqo6iteJqg79qQrEoScRviUh6scB7iwCh";
-    let tx = SolanaTransaction::from_str(tx).unwrap();
-    let txid = tx.to_transaction_id().unwrap();
-    println!("{txid}");
+#[cfg(test)]
+mod tests {
+    use anychain_core::hex;
+
+    use super::*;
+
+    #[test]
+    fn test_tx_gen() {
+        let from = "HQ2SDwyaRtbpV57dL5q21fWWKzYn53EnDeG2y2EgzHkS";
+        let to = "A9wA1dAog9XNeS33QJxHwtWQGCMokdXKa5aGyCy1nPDD";
+        let fee_payer = "6PJHXT7pQvrXBTDUTmR9gN4ZrXLHoQ4uDNLBwNB7YYN9";
+
+        let params = SolanaTransactionParameters {
+            token: None,
+            program_id: None,
+            has_token_account: None,
+            decimals: None,
+            fee_payer: Some(SolanaAddress(fee_payer.to_string())),
+            from: SolanaAddress(from.to_string()),
+            to: SolanaAddress(to.to_string()),
+            amount: 1000000000,
+            blockhash: "6ZYbfeFjSiZBpEA9A17gThKXFWJkbgWTwJcqPMpBLEsL".to_string(),
+        };
+
+        let mut tx = SolanaTransaction::new(&params).unwrap();
+        let sig_from = vec![2u8; 64];
+        let sig_fee_payer = vec![1u8; 64];
+
+        tx.sig_from = Some(sig_from);
+        tx.sig_fee_payer = Some(sig_fee_payer);
+
+        let tx_bytes = tx.to_bytes().unwrap();
+
+        println!("tx: {}", hex::encode(tx_bytes));
+    }
+
+    #[test]
+    fn test() {
+        let tx = "BU8oN58NjvzGdbuQ8zGKF9cJ7N25iWRRgnLodf42gEVDnzcQ3g5y7eygBviCRQHH4sC335gt575JA2NfjpX3P7m1vZ5WYWxHem7wW3Pc4S6YYi4ftivYiGqTMr6eKtUVCbBZabwyMuZ7iGjUtTB6L7LnfQj6wGduNUqwpGPy2xD8aFps6zRfgwNAXe9tpoa3tQvTnyU8WgkpiZjkBFdfXFw8abhsUZLZsxaYra2CHmqrXwG6VFUfhTdYANPTXcBcZ2a75RmqC19d5rYJPexmpGJV529A4WXgE4Pm5Gk5AUB7LcNmAxfkKxJk3ikGohb9n3B7vJ3T9zJZg4i6xEGapobavsLwMuYkCjnRBQ69rouMCJEtz33XNuwx1ZN84cGimZV1KSbwQgcPDFzgdZR2ZisViDWAJUXkadfCfADNEME1jxmHDy7oX9gTYJvkeZAnoFjxVhKrVZft8FaADcRgNcdZJPdt9rMMSpCJXBFgBVsGaqo6iteJqg79qQrEoScRviUh6scB7iwCh";
+        let tx = SolanaTransaction::from_str(tx).unwrap();
+        let txid = tx.to_transaction_id().unwrap();
+        println!("{txid}");
+    }
 }
