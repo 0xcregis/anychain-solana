@@ -328,9 +328,9 @@ impl Transaction for SolanaTransaction {
                 let account = &ixs[0].accounts;
                 let data = &ixs[1].data;
 
-                let funding_address = keys[account[0] as usize];
-                let funded_address = keys[account[2] as usize];
-                let token_address = keys[account[3] as usize];
+                let from = keys[ixs[1].accounts[3] as usize];
+                let to = keys[account[2] as usize];
+                let token = keys[account[3] as usize];
 
                 let ix = TokenInstruction::unpack(data)
                     .map_err(|e| TransactionError::Message(format!("{e}")))?;
@@ -338,13 +338,13 @@ impl Transaction for SolanaTransaction {
                 match ix {
                     TokenInstruction::TransferChecked { amount, decimals } => {
                         let params = SolanaTransactionParameters {
-                            token: Some(SolanaAddress(token_address.to_string())),
+                            token: Some(SolanaAddress(token.to_string())),
                             program_id: Some(SolanaAddress(format!("{program2}"))),
                             has_token_account: Some(false),
                             decimals: Some(decimals),
                             fee_payer,
-                            from: SolanaAddress(funding_address.to_string()),
-                            to: SolanaAddress(funded_address.to_string()),
+                            from: SolanaAddress(from.to_string()),
+                            to: SolanaAddress(to.to_string()),
                             amount,
                             blockhash: blockhash.to_string(),
                         };
@@ -386,21 +386,21 @@ impl Transaction for SolanaTransaction {
 
 #[cfg(test)]
 mod tests {
-    use anychain_core::hex;
-
     use super::*;
 
     #[test]
     fn test_tx_gen() {
+        let token = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+        let program_id = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
         let from = "HQ2SDwyaRtbpV57dL5q21fWWKzYn53EnDeG2y2EgzHkS";
         let to = "A9wA1dAog9XNeS33QJxHwtWQGCMokdXKa5aGyCy1nPDD";
         let fee_payer = "6PJHXT7pQvrXBTDUTmR9gN4ZrXLHoQ4uDNLBwNB7YYN9";
 
         let params = SolanaTransactionParameters {
-            token: None,
-            program_id: None,
-            has_token_account: None,
-            decimals: None,
+            token: Some(SolanaAddress(token.to_string())),
+            program_id: Some(SolanaAddress(program_id.to_string())),
+            has_token_account: Some(false),
+            decimals: Some(6),
             fee_payer: Some(SolanaAddress(fee_payer.to_string())),
             from: SolanaAddress(from.to_string()),
             to: SolanaAddress(to.to_string()),
@@ -415,16 +415,17 @@ mod tests {
         tx.sig_from = Some(sig_from);
         tx.sig_fee_payer = Some(sig_fee_payer);
 
-        let tx_bytes = tx.to_bytes().unwrap();
+        let tx = tx.to_bytes().unwrap();
 
-        println!("tx: {}", hex::encode(tx_bytes));
+        let tx = SolanaTransaction::from_bytes(&tx).unwrap();
+
+        println!("Tx: {:?}", tx);
     }
 
     #[test]
     fn test() {
         let tx = "BU8oN58NjvzGdbuQ8zGKF9cJ7N25iWRRgnLodf42gEVDnzcQ3g5y7eygBviCRQHH4sC335gt575JA2NfjpX3P7m1vZ5WYWxHem7wW3Pc4S6YYi4ftivYiGqTMr6eKtUVCbBZabwyMuZ7iGjUtTB6L7LnfQj6wGduNUqwpGPy2xD8aFps6zRfgwNAXe9tpoa3tQvTnyU8WgkpiZjkBFdfXFw8abhsUZLZsxaYra2CHmqrXwG6VFUfhTdYANPTXcBcZ2a75RmqC19d5rYJPexmpGJV529A4WXgE4Pm5Gk5AUB7LcNmAxfkKxJk3ikGohb9n3B7vJ3T9zJZg4i6xEGapobavsLwMuYkCjnRBQ69rouMCJEtz33XNuwx1ZN84cGimZV1KSbwQgcPDFzgdZR2ZisViDWAJUXkadfCfADNEME1jxmHDy7oX9gTYJvkeZAnoFjxVhKrVZft8FaADcRgNcdZJPdt9rMMSpCJXBFgBVsGaqo6iteJqg79qQrEoScRviUh6scB7iwCh";
         let tx = SolanaTransaction::from_str(tx).unwrap();
-        let txid = tx.to_transaction_id().unwrap();
-        println!("{txid}");
+        println!("{:?}", tx);
     }
 }
